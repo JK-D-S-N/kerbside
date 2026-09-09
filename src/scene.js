@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { FRONTAGE, STREETS, TREES, AVENUE } from './frontage.js';
+import { addContext } from './context-render.js';
 
 export const LANE_W = 3.2;
 export const ROAD_LEN = 800;
@@ -717,8 +718,12 @@ export function buildScene(renderer) {
 
   scene.fog = new THREE.Fog(0x0b0e14, 150, 720);
 
+  // The wider geography, so the corridor sits somewhere recognisable rather
+  // than in a void 95 m from the kerb. See src/context-render.js.
+  const context = addContext(group, { skin, renderer });
+
   return {
-    scene, group, sun, hemi, ambient,
+    scene, group, context, sun, hemi, ambient,
     busLanes, cycleLanes, windows, lampHeads, signals, halts,
     themed, theme: 'dark', outlines, edgeMat, streetLabels, frontage,
   };
@@ -764,6 +769,7 @@ export function setSceneTheme(world, mode) {
   for (const l of world.streetLabels) {
     l.material.opacity = (light ? 0.85 : 0.32) * (world.labelReveal ?? 1);
   }
+  world.context?.setTheme(world.theme);
 }
 
 export function applyTimeOfDay(world, hourFloat, renderer) {

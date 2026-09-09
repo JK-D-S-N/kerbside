@@ -30,17 +30,35 @@ import {
 // label can sit without landing on the carriageway.
 const FOOTWAY_X = 10.0;
 const SECTION_HALF = 400.0;
-// Carriageway, kerbs and both footways, with a margin. Inside this scene.js
-// owns the ground.
-const CORRIDOR_CUT = 26.0;
+// Carriageway, kerbs, both footways and the street-name labels, with a margin.
+// No flat context surface is allowed inside this box at all. Depth bias was
+// tried first and it is the wrong tool: polygon offset scales with the depth
+// slope, so at the grazing angle the working camera sits at, a near-horizontal
+// polygon gets thrown tens of metres forward and buries the carriageway.
+const CORRIDOR_CUT = 20.0;
 
 // scene.js lays its flat ground at y = -0.06. The context ground goes just
 // under it so the two never fight for the same depth, and so the seam at the
 // edge of that square is a step of a couple of centimetres rather than a wall.
 const GROUND_Y = -0.3;
-// Anything laid flat still has to clear that plane where the two overlap, or
-// the parkland beside the estate wall would be buried by it.
-const SURFACE_FLOOR = -0.02;
+// Flat surfaces ride this far above the context ground. The camera near plane
+// is 0.5 m and the far plane 1600 m, which leaves about 0.3 m of depth
+// resolution at the far edge, so the clearance has to be bigger than that or
+// the parkland and the ground trade places in the distance. It is only safe to
+// lift them this far because they are cut out of the corridor box first.
+const GRASS_LIFT = 0.35;
+const RIBBON_LIFT = 0.45;
+
+/**
+ * The four regions outside the corridor box, each convex, together covering
+ * everything the box does not. Half-planes are [a, b, c], keeping a*x + b*z + c >= 0.
+ */
+const OUTSIDE = [
+  [[-1, 0, -CORRIDOR_CUT]],
+  [[1, 0, -CORRIDOR_CUT]],
+  [[1, 0, CORRIDOR_CUT], [-1, 0, CORRIDOR_CUT], [0, -1, -SECTION_HALF]],
+  [[1, 0, CORRIDOR_CUT], [-1, 0, CORRIDOR_CUT], [0, 1, -SECTION_HALF]],
+];
 
 /**
  * Parkland has no role in scene.js's PALETTE, so these are carried here.
@@ -48,8 +66,8 @@ const SURFACE_FLOOR = -0.02;
  * corridor in dark mode and break the line-work in light mode.
  */
 const CONTEXT_PALETTE = {
-  grass: { dark: 0x1d2c22, light: 0xd9e3d4 },
-  wood:  { dark: 0x16221b, light: 0xc9d6c4 },
+  grass: { dark: 0x1d2c22, light: 0xd0dfc7 },
+  wood:  { dark: 0x16221b, light: 0xbdd0b7 },
   water: { dark: 0x1b2c3a, light: 0xcedae6 },
   spire: { dark: 0x565f70, light: 0xdfe3ea },
 };
@@ -67,6 +85,7 @@ const CONTEXT_PALETTE = {
  * @param {number} [opts.labelRank]  1 for the headline names only, 2 for all
  * @param {boolean} [opts.terrain]   draw real ground heights outside the
  *                                   modelled section, default true
+ * @param {number} [opts.labelScale] multiplier on label size, default 1
  * @param {number} [opts.labelFacing] 1 or -1. Ground labels read along the
  *                                   corridor, so they read backwards from one
  *                                   end of it. Flip this if the app's default
@@ -82,6 +101,7 @@ export function addContext(group, opts = {}) {
     labelRank = 2,
     terrain = true,
     labelFacing = 1,
+    labelScale = 1,
   } = opts;
 
   const root = new THREE.Group();
@@ -107,7 +127,7 @@ export function addContext(group, opts = {}) {
   const greenBuckets = { grass: [], wood: [], water: [] };
   for (const g of CONTEXT_GREEN) {
     if (!withinRange(g.ring, range)) continue;
-    const geo = flatPolygon(g.ring, sample, 0.06, SURFACE_FLOOR);
+    const geo = surface(polygonTriangles(g.ring), sample, GRASS_LIFT);
     if (geo) greenBuckets[g.kind].push(geo);
   }
   const layers = {};
@@ -116,9 +136,6 @@ export function addContext(group, opts = {}) {
     if (!geos.length) continue;
     const mat = own(kind, new THREE.MeshStandardMaterial({
       roughness: 1, metalness: 0, side: THREE.DoubleSide,
-      // Four centimetres of clearance over the ground is nothing at a
-      // kilometre, so the depth test needs the bias rather than the height.
-      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
     }));
     mat.color.setHex(CONTEXT_PALETTE[kind].dark);
     const mesh = new THREE.Mesh(mergeGeometries(geos), mat);
@@ -134,20 +151,17 @@ export function addContext(group, opts = {}) {
   const ribbons = [];
   for (const r of [...CONTEXT_ROADS, ...CONTEXT_AVENUE.map(toAvenue)]) {
     if (!withinRange(r.path, range)) continue;
-    // The A20 runs straight through the middle of the model. Drawing a plain
-    // ribbon over the modelled carriageway would bury the lane markings and
-    // the bus lane overlay, so the corridor itself is cut out.
-    for (const run of clipCorridor(r.path)) {
-      const geo = ribbon(run, r.w, sample, 0.09, SURFACE_FLOOR + 0.01);
-      if (geo) ribbons.push(geo);
-    }
+    // The A20 runs straight through the middle of the model, so the corridor
+    // is cut out of every ribbon rather than trusted to sit under the
+    // carriageway.
+    const geo = surface(ribbonTriangles(r.path, r.w), sample, RIBBON_LIFT);
+    if (geo) ribbons.push(geo);
   }
   if (ribbons.length) {
     const mesh = new THREE.Mesh(
       mergeGeometries(ribbons),
       skin('road', new THREE.MeshStandardMaterial({
-        roughness: 0.95, metalness: 0,
-        polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8,
+        roughness: 0.95, metalness: 0, side: THREE.DoubleSide,
       }))
     );
     mesh.receiveShadow = true;
@@ -230,27 +244,30 @@ export function addContext(group, opts = {}) {
 
   // ---- Names --------------------------------------------------------------
   // Laid flat and running along the corridor, the way scene.js prints the
-  // street names and the way a map prints anything. Deliberately not themed:
-  // the glyph is dark and the halo behind it is pale, so the same texture
-  // reads on the dark ground and on the paper one.
+  // street names and the way a map prints anything. Held deliberately below
+  // the weight of those: scene.js uses 0.062 on the same 46px canvas, and the
+  // context is background to the corridor, not competition for it.
   const labels = [];
-  for (const l of CONTEXT_LABELS) {
-    if (l.rank > labelRank || Math.hypot(l.x, l.z) > range * 1.35) continue;
-    const mesh = groundLabel(l.name, l.rank === 1 ? 0.22 : 0.13, renderer, labelFacing);
-    mesh.position.set(l.x, GROUND_Y + l.y + 1.5, l.z);
+  const place = (mesh, x, y, z) => {
+    mesh.position.set(x, GROUND_Y + y + 0.8, z);
     root.add(mesh);
     labels.push(mesh);
     disposables.push(mesh);
+  };
+  for (const l of CONTEXT_LABELS) {
+    if (l.rank > labelRank || Math.hypot(l.x, l.z) > range * 1.35) continue;
+    // Nothing of ours goes over the modelled carriageway, labels included.
+    if (Math.abs(l.x) < CORRIDOR_CUT + 12 && Math.abs(l.z) < SECTION_HALF) continue;
+    place(groundLabel(shorten(l.name), (l.rank === 1 ? 0.055 : 0.042) * labelScale,
+                      70 * labelScale, renderer, labelFacing), l.x, l.y, l.z);
   }
   for (const j of CONTEXT_JUNCTIONS) {
     if (j.rank > labelRank || Math.abs(j.z) > range) continue;
     if (Math.abs(j.z) < SECTION_HALF) continue;   // scene.js owns those
-    const mesh = groundLabel(withRef(j), j.rank === 1 ? 0.16 : 0.1, renderer, labelFacing);
     const side = j.x < 0 ? -1 : 1;
-    mesh.position.set(side * (FOOTWAY_X + 16), GROUND_Y + 1.5, j.z);
-    root.add(mesh);
-    labels.push(mesh);
-    disposables.push(mesh);
+    place(groundLabel(withRef(j), (j.rank === 1 ? 0.05 : 0.04) * labelScale,
+                      55 * labelScale, renderer, labelFacing),
+          side * (FOOTWAY_X + 13), 0, j.z);
   }
 
   const handle = {
@@ -336,7 +353,7 @@ function withinRange(pts, range) {
 }
 
 /**
- * A polygon laid on the ground and draped over the terrain.
+ * A polygon reduced to flat triangles in the (x, z) plane.
  *
  * Shape triangulation gives the fewest triangles that fill the ring, which for
  * the Stormont estate is a handful spanning a kilometre. Sampling ground height
@@ -344,21 +361,22 @@ function withinRange(pts, range) {
  * standing on it, Parliament Buildings included, so the fan is bisected down to
  * something near the DEM spacing first.
  */
-function flatPolygon(ring, sample, lift, floor) {
-  if (ring.length < 3) return null;
+function polygonTriangles(ring) {
+  if (ring.length < 3) return [];
   const shape = new THREE.Shape(ring.map(([x, z]) => new THREE.Vector2(x, z)));
   let flat;
   try {
     flat = new THREE.ShapeGeometry(shape);
   } catch {
-    return null;                      // self-intersecting rings do exist in OSM
+    return [];                        // self-intersecting rings do exist in OSM
   }
   const src = flat.attributes.position;
-  if (!src.count) return null;
+  const index = flat.getIndex();
+  if (!src.count || !index) { flat.dispose(); return []; }
 
   const pts = [];
   for (let i = 0; i < src.count; i++) pts.push([src.getX(i), src.getY(i)]);
-  let tris = Array.from(flat.getIndex().array);
+  let tris = Array.from(index.array);
   flat.dispose();
 
   // Longest-edge bisection. Midpoints are shared through the cache, so a split
@@ -382,44 +400,30 @@ function flatPolygon(ring, sample, lift, floor) {
     for (let i = 0; i < tris.length; i += 3) {
       const [a, b, c] = [tris[i], tris[i + 1], tris[i + 2]];
       const e = [[a, b, c], [b, c, a], [c, a, b]]
-        .map(([p, q, r]) => ({ p, q, r, d: Math.hypot(pts[p][0] - pts[q][0], pts[p][1] - pts[q][1]) }))
+        .map(([q, r, t]) => ({ q, r, t, d: Math.hypot(pts[q][0] - pts[r][0], pts[q][1] - pts[r][1]) }))
         .sort((u, v) => v.d - u.d)[0];
       if (e.d <= MAX) { next.push(a, b, c); continue; }
-      const m = midpoint(e.p, e.q);
-      next.push(e.p, m, e.r, m, e.q, e.r);
+      const m = midpoint(e.q, e.r);
+      next.push(e.q, m, e.t, m, e.r, e.t);
       split = true;
     }
     tris = next;
     if (!split) break;
   }
 
-  const pos = new Float32Array(pts.length * 3);
-  for (let i = 0; i < pts.length; i++) {
-    const [x, z] = pts[i];
-    pos[i * 3] = x;
-    pos[i * 3 + 1] = Math.max(floor, GROUND_Y + sample(x, z) + lift);
-    pos[i * 3 + 2] = z;
-  }
-  // Shape triangulation is anticlockwise in XY. Reading its y as world z
-  // mirrors that, so the winding comes back the other way or every face is lit
-  // from underneath.
-  const idx = new Array(tris.length);
+  const out = [];
   for (let i = 0; i < tris.length; i += 3) {
-    idx[i] = tris[i + 2]; idx[i + 1] = tris[i + 1]; idx[i + 2] = tris[i];
+    out.push([pts[tris[i]], pts[tris[i + 1]], pts[tris[i + 2]]]);
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setIndex(idx);
-  geo.computeVertexNormals();
-  return geo;
+  return out;
 }
 
-/** A road as a flat ribbon of the given width, draped over the terrain. */
-function ribbon(path, width, sample, lift, floor) {
-  if (path.length < 2) return null;
+
+/** A road as a ribbon of the given width, as flat triangles in (x, z). */
+function ribbonTriangles(path, width) {
+  if (path.length < 2) return [];
   const hw = width / 2;
-  const verts = [];
-  const idx = [];
+  const edge = [];
   for (let i = 0; i < path.length; i++) {
     const [x, z] = path[i];
     const p = path[Math.max(0, i - 1)];
@@ -428,34 +432,95 @@ function ribbon(path, width, sample, lift, floor) {
     let dz = q[1] - p[1];
     const len = Math.hypot(dx, dz) || 1;
     dx /= len; dz /= len;
-    const y = Math.max(floor, GROUND_Y + sample(x, z) + lift);
-    verts.push(x - dz * hw, y, z + dx * hw, x + dz * hw, y, z - dx * hw);
-    if (i > 0) {
-      const a = (i - 1) * 2;
-      idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    edge.push([[x - dz * hw, z + dx * hw], [x + dz * hw, z - dx * hw]]);
+  }
+  const out = [];
+  for (let i = 1; i < edge.length; i++) {
+    const [al, ar] = edge[i - 1];
+    const [bl, br] = edge[i];
+    out.push([al, bl, ar], [ar, bl, br]);
+  }
+  return out;
+}
+
+
+/** Clip a convex polygon to a half-plane a*x + b*z + c >= 0. */
+function halfPlane(poly, [a, b, c]) {
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i];
+    const q = poly[(i + 1) % poly.length];
+    const dp = a * p[0] + b * p[1] + c;
+    const dq = a * q[0] + b * q[1] + c;
+    if (dp >= 0) out.push(p);
+    if ((dp >= 0) !== (dq >= 0)) {
+      const t = dp / (dp - dq);
+      out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]);
+    }
+  }
+  return out;
+}
+
+
+/**
+ * Cut the modelled corridor out of a set of flat triangles.
+ *
+ * The guarantee this buys is the one that matters: no context surface is ever
+ * drawn over the carriageway, so no camera angle and no depth precision can put
+ * one there. Whole triangles clear of the box skip the work.
+ */
+function clipCorridor(tris) {
+  const out = [];
+  for (const t of tris) {
+    const xs = [t[0][0], t[1][0], t[2][0]];
+    const zs = [t[0][1], t[1][1], t[2][1]];
+    if (Math.min(...xs) >= CORRIDOR_CUT || Math.max(...xs) <= -CORRIDOR_CUT
+        || Math.min(...zs) >= SECTION_HALF || Math.max(...zs) <= -SECTION_HALF) {
+      out.push(t);
+      continue;
+    }
+    for (const region of OUTSIDE) {
+      let poly = t;
+      for (const plane of region) {
+        poly = halfPlane(poly, plane);
+        if (poly.length < 3) break;
+      }
+      for (let i = 2; i < poly.length; i++) out.push([poly[0], poly[i - 1], poly[i]]);
+    }
+  }
+  return out;
+}
+
+
+/**
+ * Flat triangles, clipped clear of the corridor and draped over the terrain.
+ *
+ * Normals are forced straight up rather than computed, so winding never decides
+ * whether a piece of ground is lit from underneath.
+ */
+function surface(tris, sample, lift) {
+  const kept = clipCorridor(tris);
+  if (!kept.length) return null;
+  const pos = new Float32Array(kept.length * 9);
+  const nrm = new Float32Array(kept.length * 9);
+  let k = 0;
+  for (const t of kept) {
+    // Wind anticlockwise seen from above, so the front face is the top one.
+    const cross = (t[1][1] - t[0][1]) * (t[2][0] - t[0][0])
+                - (t[1][0] - t[0][0]) * (t[2][1] - t[0][1]);
+    const v = cross >= 0 ? t : [t[0], t[2], t[1]];
+    for (const [x, z] of v) {
+      pos[k] = x;
+      pos[k + 1] = GROUND_Y + sample(x, z) + lift;
+      pos[k + 2] = z;
+      nrm[k + 1] = 1;
+      k += 3;
     }
   }
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
-  geo.setIndex(idx);
-  geo.computeVertexNormals();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
   return geo;
-}
-
-/** Split a path around the modelled section, which scene.js draws itself. */
-function clipCorridor(path) {
-  const runs = [];
-  let run = [];
-  for (const p of path) {
-    if (Math.abs(p[1]) <= SECTION_HALF && Math.abs(p[0]) <= CORRIDOR_CUT) {
-      if (run.length > 1) runs.push(run);
-      run = [];
-    } else {
-      run.push(p);
-    }
-  }
-  if (run.length > 1) runs.push(run);
-  return runs;
 }
 
 
@@ -463,6 +528,19 @@ function clipCorridor(path) {
 function toAvenue(path) {
   return { path, w: 13.0 };
 }
+
+/**
+ * OSM names things the way a letterhead does. "Department of Agriculture,
+ * Environment and Rural Affairs" is nine times the length of "Rosepark", and
+ * on the deck at a readable glyph size that is 300 m of text. The part before
+ * the comma is what anyone would say out loud anyway.
+ */
+function shorten(name) {
+  if (name.length <= 28) return name;
+  const cut = name.indexOf(',');
+  return cut >= 8 ? name.slice(0, cut) : name;
+}
+
 
 /** "Castlehill Road", or "Knock Road A55" where OSM has the number. */
 function withRef(j) {
@@ -476,7 +554,7 @@ function withRef(j) {
  * reads against the dark ground and against the light one. That is cheaper
  * than two textures and it means the labels need no theme wiring at all.
  */
-function groundLabel(text, scale, renderer, facing = 1) {
+function groundLabel(text, scale, maxWidth, renderer, facing = 1) {
   const pad = 30;
   const spacing = 3;
   const font = '600 46px -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif';
@@ -494,17 +572,21 @@ function groundLabel(text, scale, renderer, facing = 1) {
   ctx.letterSpacing = `${spacing}px`;
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = 10;
-  ctx.strokeStyle = 'rgba(244, 247, 251, 0.92)';
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = 'rgba(240, 244, 250, 0.75)';
   ctx.strokeText(upper, pad, 52);
   ctx.fillStyle = '#0f1620';
   ctx.fillText(upper, pad, 52);
 
   const tex = new THREE.CanvasTexture(canvas);
   if (renderer) tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  // A long name would otherwise stretch hundreds of metres across the scene.
+  // "Department of Agriculture, Environment and Rural Affairs" is a real OSM
+  // name and it is nine times the length of "Rosepark".
+  const s = Math.min(scale, maxWidth / canvas.width);
   const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(canvas.width * scale, canvas.height * scale),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.92, depthWrite: false })
+    new THREE.PlaneGeometry(canvas.width * s, canvas.height * s),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.62, depthWrite: false })
   );
   mesh.rotation.x = -Math.PI / 2;
   mesh.rotation.z = facing * Math.PI / 2;   // along the corridor, as scene.js does
