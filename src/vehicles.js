@@ -13,7 +13,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { LANES, ROAD_LEN, HALF } from './scene.js';
+import { LANES, ROAD_LEN, HALF, JUNCTION_Z } from './scene.js';
 
 const MAX_CARS = 460;
 const MAX_BUSES = 16;
@@ -27,7 +27,20 @@ const IDM = {
   delta: 4,
 };
 
-const SIGNAL_S = ROAD_LEN - 70;  // distance from lane entry to the stop line
+/**
+ * Stop lines, as distance from lane entry, one per signalised junction.
+ *
+ * A single stop line on 800 m of arterial was why the road never looked like
+ * the road: it is the stopping that makes the queue, not the volume. These are
+ * the real junctions from JUNCTION_Z, so a car crossing the section meets
+ * every set of lights it actually meets.
+ */
+const STOP_LINES = {
+  inbound: JUNCTION_Z.map((z) => HALF - z).filter((s) => s > 20 && s < ROAD_LEN - 20)
+    .sort((a, b) => a - b),
+  outbound: JUNCTION_Z.map((z) => z + HALF).filter((s) => s > 20 && s < ROAD_LEN - 20)
+    .sort((a, b) => a - b),
+};
 const HALT_S = 250;              // distance from lane entry to the Glider halt
 const CAR_LEN = 4.3;
 const BUS_LEN = 18;              // Van Hool Exqui.City, 18 m articulated
@@ -126,11 +139,29 @@ export class TrafficSim {
     this._s = new THREE.Vector3(1, 1, 1);
   }
 
-  /** Signal state for a direction: true when green. */
-  isGreen(direction) {
-    const offset = direction === 'inbound' ? 0 : this.cycleTimeSec * 0.5;
-    const phase = ((this.time + offset) % this.cycleTimeSec) / this.cycleTimeSec;
+  /**
+   * Signal state for one junction on a direction: true when green.
+   *
+   * Junctions are offset progressively rather than run in lockstep. Perfect
+   * co-ordination would clear the road in one wave and hide the queueing;
+   * offsetting them is both more honest and what produces the platoons you
+   * actually sit in.
+   */
+  isGreen(direction, junction = 0) {
+    const dirOffset = direction === 'inbound' ? 0 : this.cycleTimeSec * 0.5;
+    const stagger = junction * this.cycleTimeSec * 0.28;
+    const phase = (((this.time + dirOffset + stagger) % this.cycleTimeSec) + this.cycleTimeSec)
+      % this.cycleTimeSec / this.cycleTimeSec;
     return phase < this.greenFraction;
+  }
+
+  /** The next red stop line ahead of s, or null if the road ahead is clear. */
+  nextRedStop(direction, s) {
+    const lines = STOP_LINES[direction] || [];
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i] > s && !this.isGreen(direction, i)) return lines[i];
+    }
+    return null;
   }
 
   /**
@@ -286,9 +317,10 @@ export class TrafficSim {
           dv = veh.v - leader.v;
         }
 
-        // A red signal is a stationary obstacle on the stop line.
-        if (!green && veh.s < SIGNAL_S) {
-          const gSig = SIGNAL_S - veh.s - 0.5;
+        // A red signal is a stationary obstacle on its stop line.
+        const stop = this.nextRedStop(lane.direction, veh.s);
+        if (stop !== null) {
+          const gSig = stop - veh.s - 0.5;
           if (gSig < gap) { gap = gSig; dv = veh.v; }
         }
 

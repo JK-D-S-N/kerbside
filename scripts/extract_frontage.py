@@ -250,7 +250,7 @@ def main():
         f'[out:json][timeout:120];('
         f'way["name"="Prince of Wales Avenue"](54.590,-5.845,54.610,-5.820);'
         f'way["barrier"](54.5935,-5.842,54.5975,-5.828);'
-        f'way["building"]["name"~"Parliament"](54.590,-5.845,54.610,-5.820);'
+        f'way["building"](54.5975,-5.8395,54.6005,-5.8340);'
         f');out geom tags;')['elements']
 
     avenue, boundary, parliament = [], [], []
@@ -261,12 +261,19 @@ def main():
             continue
         run = [[round(x, 1), round(z, 1)] for x, z in pts
                if abs(z) <= half * 3 and abs(x) < 900]
+        if t.get('building') and len(pts) >= 4:
+            pass
         if len(run) < 2:
+            continue
+        if t.get('building'):
+            # Keep only the big one on the rise: Parliament Buildings itself.
+            xs = [q[0] for q in pts]; zs = [q[1] for q in pts]
+            if (max(xs) - min(xs)) * (max(zs) - min(zs)) < 3000:
+                continue
+            parliament.append([[round(x, 1), round(z, 1)] for x, z in pts])
             continue
         if t.get('name') == 'Prince of Wales Avenue':
             avenue.append(run)
-        elif t.get('building'):
-            parliament.append(run)
         elif t.get('barrier'):
             boundary.append(run)
     print(f'gates: {len(avenue)} avenue runs, {len(boundary)} boundary runs, '
