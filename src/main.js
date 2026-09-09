@@ -9,6 +9,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { buildScene, applyTimeOfDay, setSceneTheme } from './scene.js';
 import { TrafficSim } from './vehicles.js';
 import { COUNTS } from './counts.js';
+import { CORRIDOR, LANDMARKS, COUNT_POINTS, LOCATOR_RANGE } from './frontage.js';
 import {
   DEFAULT_ASSUMPTIONS, runDay, solveBreakEven, busLaneOperating, evaluateHour,
 } from './model.js';
@@ -636,6 +637,97 @@ animate();
 
 requestAnimationFrame(() => {
   setTimeout(() => {
+
+// ---- Locator ----------------------------------------------------------------
+// A plan of the corridor with the modelled section marked on it. "Where am I?"
+// is a fair question to ask of a 3D view, and no amount of camera work answers
+// it as fast as a line with names on it.
+function drawLocator() {
+  const el = $('locator');
+  if (!el) return;
+  const W = 344, H = 150, PAD = 16;
+  const half = 200;                       // the modelled section, metres
+  const sx = (z) => PAD + ((z + LOCATOR_RANGE) / (LOCATOR_RANGE * 2)) * (W - PAD * 2);
+  const mid = 78;
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label',
+    'Plan of the Upper Newtownards Road showing the modelled section at the Stormont gates');
+
+  const add = (name, attrs, text) => {
+    const n = document.createElementNS(ns, name);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+    if (text != null) n.textContent = text;
+    svg.appendChild(n);
+    return n;
+  };
+
+  // The road, drawn flat: this is a strip diagram, not a survey.
+  add('line', { x1: PAD, y1: mid, x2: W - PAD, y2: mid,
+                stroke: 'var(--ink-3)', 'stroke-width': 1.5, opacity: 0.45 });
+
+  // The modelled section. 400 m of a 6 km strip is a hairline at true scale,
+  // so the marker gets a floor on its width and says what it is.
+  const trueW = sx(half) - sx(-half);
+  const markW = Math.max(30, trueW);
+  const x0 = sx(0) - markW / 2;
+  add('rect', { x: x0, y: mid - 10, width: markW, height: 20,
+                fill: 'var(--scheme)', opacity: 0.18 });
+  for (const x of [x0, x0 + markW]) {
+    add('line', { x1: x, y1: mid - 10, x2: x, y2: mid + 10,
+                  stroke: 'var(--scheme)', 'stroke-width': 1.5 });
+  }
+  add('line', { x1: x0, y1: mid, x2: x0 + markW, y2: mid,
+                stroke: 'var(--scheme)', 'stroke-width': 3 });
+
+  const micro = {
+    'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    'font-size': 8.5, 'letter-spacing': 0.6,
+  };
+
+  // Count points, above the line.
+  for (const cp of COUNT_POINTS) {
+    add('line', { x1: sx(cp.z), y1: mid - 10, x2: sx(cp.z), y2: mid - 20,
+                  stroke: 'var(--ink-3)', 'stroke-width': 1 });
+    add('circle', { cx: sx(cp.z), cy: mid - 22, r: 2.4, fill: 'var(--scheme)' });
+  }
+  add('text', { x: sx(0), y: mid - 30, 'text-anchor': 'middle', fill: 'var(--ink-2)', ...micro },
+      'DFI 918 · 921');
+  add('text', { x: sx(0), y: 16, 'text-anchor': 'middle', fill: 'var(--scheme)', ...micro },
+      'THIS 400 M');
+  add('line', { x1: sx(0), y1: 21, x2: sx(0), y2: mid - 34,
+                stroke: 'var(--scheme)', 'stroke-width': 1, opacity: 0.5 });
+
+  // Landmarks, below, so the two rows never collide.
+  const placed = [];
+  for (const lm of [...LANDMARKS].sort((a, b) => a.z - b.z)) {
+    const x = sx(lm.z);
+    if (x < PAD || x > W - PAD) continue;
+    if (Math.abs(x - sx(0)) < 34) continue;   // never crowd the section marker
+    if (placed.some((p) => Math.abs(p - x) < 54)) continue;
+    placed.push(x);
+    add('line', { x1: x, y1: mid + 9, x2: x, y2: mid + 17,
+                  stroke: 'var(--ink-3)', 'stroke-width': 1, opacity: 0.7 });
+    const anchor = x < PAD + 40 ? 'start' : x > W - PAD - 40 ? 'end' : 'middle';
+    add('text', { x, y: mid + 29, 'text-anchor': anchor, fill: 'var(--ink-2)', ...micro },
+        lm.name.toUpperCase());
+  }
+
+  // Scale bar, because a strip diagram with no scale is a cartoon.
+  const kmPx = sx(1000) - sx(0);
+  add('line', { x1: PAD, y1: H - 6, x2: PAD + kmPx, y2: H - 6,
+                stroke: 'var(--ink-3)', 'stroke-width': 1 });
+  for (const x of [PAD, PAD + kmPx]) {
+    add('line', { x1: x, y1: H - 9, x2: x, y2: H - 3, stroke: 'var(--ink-3)', 'stroke-width': 1 });
+  }
+  add('text', { x: PAD + kmPx + 7, y: H - 3, fill: 'var(--ink-3)', ...micro }, '1 KM');
+
+  el.replaceChildren(svg);
+}
+drawLocator();
+
 // ---- Theme ----------------------------------------------------------------
 // Dark by default. Light exists for projectors, and it moves the 3D palette as
 // well as the chrome, so the corridor does not stay a black hole on a screen

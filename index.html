@@ -6,115 +6,18 @@
 <title>Kerbside — Upper Newtownards Road</title>
 <meta name="description" content="Corridor scenario modelling for NI road schemes. Test a bus lane against real DfI traffic counts." />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230b0e14'/><rect x='6' y='5' width='4' height='22' rx='2' fill='%23d95926'/><rect x='14' y='5' width='4' height='22' rx='2' fill='%233987e5' opacity='.8'/><rect x='22' y='5' width='4' height='22' rx='2' fill='%231baf7a' opacity='.7'/></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" />
 </head>
 <body>
 <div id="app">
   <canvas id="view"></canvas>
-
-  <div id="loading" class="loading"><div class="spinner"></div><span>Building the corridor</span></div>
-
-  <header class="brand card">
-    <div class="brand-mark">
-      <span class="bar b1"></span><span class="bar b2"></span><span class="bar b3"></span>
+  <aside class="rail rail--controls">
+    <div class="rail-head rail-head--controls">
+      <h2>Controls</h2>
     </div>
-    <div class="brand-text">
-      <h1>Kerbside</h1>
-      <p>Upper Newtownards Road, Belfast <span class="sep">·</span> A20</p>
-    </div>
-    <button id="themeToggle" class="theme-toggle" type="button"
-            aria-label="Switch to light mode" title="Light mode">
-      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-        <path class="moon" d="M15.5 12.4A6.6 6.6 0 0 1 7.6 4.5a6.6 6.6 0 1 0 7.9 7.9Z"
-              fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-        <g class="sun" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-          <circle cx="10" cy="10" r="3.4"/>
-          <path d="M10 2.2v1.6M10 16.2v1.6M2.2 10h1.6M16.2 10h1.6M4.5 4.5l1.1 1.1M14.4 14.4l1.1 1.1M15.5 4.5l-1.1 1.1M5.6 14.4l-1.1 1.1"/>
-        </g>
-      </svg>
-    </button>
-  </header>
-
-  <div class="verdict card" id="verdict">
-    <div class="verdict-label">Break-even</div>
-    <div class="verdict-figure" id="verdictFigure">—</div>
-    <p class="verdict-body" id="verdictBody">Working it out.</p>
-  </div>
-
-  <button class="finding-toggle card" id="findingToggle" aria-expanded="false">
-    <span class="dot"></span> What the count data actually shows
-  </button>
-
-  <div class="finding card" id="finding" hidden>
-    <button class="finding-close" id="findingClose" aria-label="Close">×</button>
-    <h2>Three things in the raw DfI counts</h2>
-    <ol>
-      <li>
-        <strong>The bus lane is visible in the loop data, to the hour.</strong>
-        Inbound nearside-lane flow collapses from <b>187</b> vehicles at 06:00 to
-        <b>63</b> at 07:00, holds under 80 all day, then jumps back to <b>196</b> at
-        19:00. Outbound does the same, 106 to 37, then back to 311. That is the
-        07:00 to 19:00 restriction, written into the counts.
-      </li>
-      <li>
-        <strong>Traffic is down on this road, not up.</strong>
-        Inbound AADT was <b>16,850</b> in 2016 and <b>13,380</b> in 2023, about
-        21% lower. Outbound went 15,840 to 13,350. Covid and home working are
-        tangled up in that, but the volume is not higher than it was before the
-        lane changed.
-      </li>
-      <li>
-        <strong>The morning peak has spread, which is what a capacity-constrained
-        road looks like.</strong> Inbound flow peaks at <b>07:00</b>, not 08:00,
-        and the offside lane carries <b>978</b> vehicles in that hour, within about
-        1% of the modelled capacity of a single lane. People are leaving earlier to
-        get ahead of it.
-      </li>
-    </ol>
-    <p class="finding-note">
-      One more thing worth knowing before the argument starts: the 2017 change made
-      this bus lane <em>less</em> restrictive, not more. It ran 24 hours before
-      23 January 2017 and 07:00 to 19:00 after.
-    </p>
-  </div>
-
-  <section class="readout card">
-    <div class="timebar">
-      <button id="playBtn" class="play" aria-label="Play the day">
-        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
-      </button>
-      <div class="time-slider">
-        <input type="range" id="hour" min="0" max="23" step="1" value="8" aria-label="Hour of day" />
-        <div class="time-ticks" id="timeTicks"></div>
-      </div>
-      <div class="time-value"><span id="hourLabel">08:00</span><em id="laneState">bus lane on</em></div>
-    </div>
-
-    <div class="kpis" id="kpis"></div>
-
-    <div class="chart-head">
-      <h3>Person-hours of delay by hour</h3>
-      <div class="chart-actions">
-        <div class="legend">
-          <span><i style="background:#d95926"></i>Scenario</span>
-          <span><i style="background:#3987e5"></i>Baseline: no reallocation</span>
-        </div>
-        <button id="tableBtn" class="ghost" aria-pressed="false">Table</button>
-      </div>
-    </div>
-    <div class="chart-wrap" id="chartWrap">
-      <div class="chart-tooltip" id="chartTooltip" hidden></div>
-    </div>
-    <div class="table-wrap" id="tableWrap" hidden>
-      <table>
-        <thead><tr><th>Hour</th><th>Bus lane</th><th class="num">Scenario</th><th class="num">Baseline</th><th class="num">Difference</th></tr></thead>
-        <tbody id="tableBody"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <aside class="panel">
-    <div class="panel-scroll">
-
+    <div class="rail-scroll">
       <div class="group">
         <h2>Scenario</h2>
         <div class="presets" id="presets"></div>
@@ -216,10 +119,143 @@
         Built for Builders Night 001, Ormeau Labs, 10 September 2026.
         Real counts, an editable model, and a deliberately visible list of what it cannot tell you.
       </p>
+
     </div>
   </aside>
 
-  <div class="hud" id="hud"></div>
+  <div class="results">
+    <div class="rail-head">
+      <div class="rail-top">
+    <button id="themeToggle" class="theme-toggle" type="button"
+            aria-label="Switch to light mode" title="Light mode">
+      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+        <path class="moon" d="M15.5 12.4A6.6 6.6 0 0 1 7.6 4.5a6.6 6.6 0 1 0 7.9 7.9Z"
+              fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        <g class="sun" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="10" cy="10" r="3.4"/>
+          <path d="M10 2.2v1.6M10 16.2v1.6M2.2 10h1.6M16.2 10h1.6M4.5 4.5l1.1 1.1M14.4 14.4l1.1 1.1M15.5 4.5l-1.1 1.1M5.6 14.4l-1.1 1.1"/>
+        </g>
+      </svg>
+    </button>
+      </div>
+      <h1>Kerbside</h1>
+      <div class="chips">
+        <span class="chip">Upper Newtownards Road · A20</span>
+        <span class="chip">Stormont gates, Belfast</span>
+        <span class="chip">DfI 918 · 921</span>
+      </div>
+    </div>
+
+    <div class="results-scroll">
+      <section class="block">
+        <div class="block-head"><h2>Where this is</h2><span class="block-note" id="locNote">400 m section</span></div>
+        <div class="locator" id="locator"></div>
+      </section>
+
+      <section class="block block-verdict">
+  <div class="verdict card" id="verdict">
+    <div class="verdict-label">Break-even</div>
+    <div class="verdict-figure" id="verdictFigure">—</div>
+    <p class="verdict-body" id="verdictBody">Working it out.</p>
+  </div>
+
+  <button class="finding-toggle card" id="findingToggle" aria-expanded="false">
+    <span class="dot"></span> What the count data actually shows
+  </button>
+
+      </section>
+
+      <section class="block">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="chart-head">
+      <h3>Person-hours of delay by hour</h3>
+      <div class="chart-actions">
+        <div class="legend">
+          <span><i style="background:#d95926"></i>Scenario</span>
+          <span><i style="background:#3987e5"></i>Baseline: no reallocation</span>
+        </div>
+        <button id="tableBtn" class="ghost" aria-pressed="false">Table</button>
+      </div>
+    </div>
+    <div class="chart-wrap" id="chartWrap">
+      <div class="chart-tooltip" id="chartTooltip" hidden></div>
+    </div>
+    <div class="table-wrap" id="tableWrap" hidden>
+      <table>
+        <thead><tr><th>Hour</th><th>Bus lane</th><th class="num">Scenario</th><th class="num">Baseline</th><th class="num">Difference</th></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+      </section>
+
+
+
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="hud" id="hud"></div>
+    <div class="timestrip">
+    <div class="timebar">
+      <button id="playBtn" class="play" aria-label="Play the day">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+      </button>
+      <div class="time-slider">
+        <input type="range" id="hour" min="0" max="23" step="1" value="8" aria-label="Hour of day" />
+        <div class="time-ticks" id="timeTicks"></div>
+      </div>
+      <div class="time-value"><span id="hourLabel">08:00</span><em id="laneState">bus lane on</em></div>
+    </div>
+
+
+    </div>
+  </div>
+
+  <div class="finding card" id="finding" hidden>
+    <button class="finding-close" id="findingClose" aria-label="Close">×</button>
+    <h2>Three things in the raw DfI counts</h2>
+    <ol>
+      <li>
+        <strong>The bus lane is visible in the loop data, to the hour.</strong>
+        Inbound nearside-lane flow collapses from <b>187</b> vehicles at 06:00 to
+        <b>63</b> at 07:00, holds under 80 all day, then jumps back to <b>196</b> at
+        19:00. Outbound does the same, 106 to 37, then back to 311. That is the
+        07:00 to 19:00 restriction, written into the counts.
+      </li>
+      <li>
+        <strong>Traffic is down on this road, not up.</strong>
+        Inbound AADT was <b>16,850</b> in 2016 and <b>13,380</b> in 2023, about
+        21% lower. Outbound went 15,840 to 13,350. Covid and home working are
+        tangled up in that, but the volume is not higher than it was before the
+        lane changed.
+      </li>
+      <li>
+        <strong>The morning peak has spread, which is what a capacity-constrained
+        road looks like.</strong> Inbound flow peaks at <b>07:00</b>, not 08:00,
+        and the offside lane carries <b>978</b> vehicles in that hour, within about
+        1% of the modelled capacity of a single lane. People are leaving earlier to
+        get ahead of it.
+      </li>
+    </ol>
+    <p class="finding-note">
+      One more thing worth knowing before the argument starts: the 2017 change made
+      this bus lane <em>less</em> restrictive, not more. It ran 24 hours before
+      23 January 2017 and 07:00 to 19:00 after.
+    </p>
+  </div>
+
+
+  <div id="loading" class="loading"><div class="spinner"></div><span>Building the corridor</span></div>
+
+
+
+
+
+
+
+
 </div>
 <script type="module" src="/src/main.js"></script>
 </body>

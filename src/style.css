@@ -7,80 +7,80 @@
 
 :root {
   color-scheme: dark;
-  --bg: #0b0e14;
-  --surface: #16181d;
-  --surface-2: #1b1f27;
-  --surface-3: #232833;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.16);
-  --ink: #f2f4f8;
-  --ink-2: #a9b1c1;
-  --ink-3: #6f7889;
-  --scheme: #d95926;
-  --baseline: #3987e5;
-  --good: #0ca30c;
-  --good-bright: #29c46b;
-  --bad: #e06060;
-  --warn: #fab219;
+  --bg: #0B0B0B;
+  --surface: #131313;
+  --surface-2: #171717;
+  --surface-3: #1E1E1E;
+  --line: rgba(245,245,242,0.10);
+  --line-strong: rgba(245,245,242,0.20);
+  --ink: #F5F5F2;
+  --ink-2: #888884;
+  --ink-3: #6E6E6A;
+  --scheme: #949DFF;
+  --baseline: #888884;
+  --good: #2ED3B7;
+  --good-bright: #2ED3B7;
+  --bad: #FF5A6E;
+  --warn: #FFB020;
   --radius: 14px;
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'IBM Plex Mono', 'Courier New', monospace;
   --panel-w: 384px;
-  --card-bg: rgba(18, 21, 27, 0.82);
-  --card-bg-2: rgba(14, 17, 22, 0.9);
-  --card-bg-3: rgba(18, 21, 27, 0.72);
-  --well: #0d1016;
-  --track: rgba(255, 255, 255, 0.11);
-  --thumb: #fff;
-  --thumb-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-  --hairline: rgba(255, 255, 255, 0.04);
-  --spinner-ring: rgba(255, 255, 255, 0.15);
-  --play-hover: #2c3340;
-  --scheme-ink: #ffb894;
-  --warn-ink: #f5cf7c;
-  --chart-grid: rgba(255, 255, 255, 0.07);
-  --chart-crosshair: rgba(255, 255, 255, 0.30);
-  --chart-rule: rgba(255, 255, 255, 0.5);
-  --chart-halo: #16181d;
+  --card-bg: rgba(11,11,11,0.90);
+  --card-bg-2: rgba(11,11,11,0.94);
+  --card-bg-3: rgba(11,11,11,0.86);
+  --well: #131313;
+  --track: rgba(245,245,242,0.16);
+  --thumb: #F5F5F2;
+  --thumb-shadow: none;
+  --hairline: rgba(245,245,242,0.06);
+  --spinner-ring: rgba(245,245,242,0.16);
+  --play-hover: #1E1E1E;
+  --scheme-ink: #949DFF;
+  --warn-ink: #FFB020;
+  --chart-grid: rgba(245,245,242,0.08);
+  --chart-crosshair: rgba(245,245,242,0.30);
+  --chart-rule: rgba(245,245,242,0.45);
+  --chart-halo: #0B0B0B;
 }
 
 /* Light. Surfaces climb rather than fall, the hairlines go dark, and the
    accents darken enough to hold their contrast on white. */
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #eef1f6;
-  --surface: #ffffff;
-  --surface-2: #f4f6fa;
-  --surface-3: #e7ebf2;
-  --line: rgba(15, 23, 42, 0.12);
-  --line-strong: rgba(15, 23, 42, 0.22);
-  --ink: #101725;
-  --ink-2: #4a5568;
-  --ink-3: #78849a;
-  --scheme: #c2410c;
-  --baseline: #1d5fbf;
-  --good: #0a7d38;
-  --good-bright: #0a7d38;
-  --bad: #c2334d;
-  --warn: #9a6b00;
+  --bg: #EBEBEA;
+  --surface: #F5F5F2;
+  --surface-2: #EBEBEA;
+  --surface-3: #E2E2E0;
+  --line: rgba(11,11,11,0.08);
+  --line-strong: rgba(11,11,11,0.18);
+  --ink: #0B0B0B;
+  --ink-2: #6A6A67;
+  --ink-3: #8A8A86;
+  --scheme: #4855FF;
+  --baseline: #6A6A67;
+  --good: #2F6B2F;
+  --good-bright: #2F6B2F;
+  --bad: #A11221;
+  --warn: #8A5A00;
   --shadow: 0 12px 40px rgba(15, 23, 42, 0.14), 0 2px 8px rgba(15, 23, 42, 0.08);
-  --card-bg: rgba(255, 255, 255, 0.9);
-  --card-bg-2: rgba(255, 255, 255, 0.93);
-  --card-bg-3: rgba(255, 255, 255, 0.86);
-  --well: #f4f6fa;
-  --track: rgba(15, 23, 42, 0.14);
-  --thumb: #ffffff;
-  --thumb-shadow: 0 1px 3px rgba(15, 23, 42, 0.35), 0 0 0 1px rgba(15, 23, 42, 0.16);
-  --hairline: rgba(15, 23, 42, 0.06);
-  --spinner-ring: rgba(15, 23, 42, 0.15);
-  --play-hover: #dfe4ec;
-  --scheme-ink: #9a3412;
-  --warn-ink: #7a5400;
-  --chart-grid: rgba(15, 23, 42, 0.10);
-  --chart-crosshair: rgba(15, 23, 42, 0.35);
-  --chart-rule: rgba(15, 23, 42, 0.55);
-  --chart-halo: #ffffff;
+  --card-bg: rgba(245,245,242,0.94);
+  --card-bg-2: rgba(245,245,242,0.96);
+  --card-bg-3: rgba(245,245,242,0.92);
+  --well: #EBEBEA;
+  --track: rgba(11,11,11,0.14);
+  --thumb: #F5F5F2;
+  --thumb-shadow: 0 0 0 1px rgba(11,11,11,0.30);
+  --hairline: rgba(11,11,11,0.06);
+  --spinner-ring: rgba(11,11,11,0.14);
+  --play-hover: #E2E2E0;
+  --scheme-ink: #4855FF;
+  --warn-ink: #8A5A00;
+  --chart-grid: rgba(11,11,11,0.08);
+  --chart-crosshair: rgba(11,11,11,0.35);
+  --chart-rule: rgba(11,11,11,0.55);
+  --chart-halo: #F5F5F2;
 }
 
 * { box-sizing: border-box; }
@@ -516,3 +516,142 @@ input[type="range"]:focus-visible { outline: 2px solid var(--baseline); outline-
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .verdict { width: 260px; }
 }
+
+/* ==========================================================================
+   Square. One rail on the left holding everything, the corridor filling the
+   rest edge to edge. No radii, no shadows, hairlines only, and a crosshair
+   tick at the block corners so the grid is visible rather than implied.
+   ========================================================================== */
+
+:root { --rail-w: 392px; --tick: var(--ink-3); }
+
+.card, .block, .panel, .rail, button, input, select, .chip,
+.kpi, .kpis > *, .preset, .switch .track, .chart-wrap, .table-wrap,
+.finding, .theme-toggle, .ghost, .play {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.rail {
+  position: absolute; inset: 0 auto 0 0; z-index: 12;
+  width: var(--rail-w);
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--line-strong);
+  backdrop-filter: none;
+}
+.rail-head { padding: 20px 22px 16px; border-bottom: 1px solid var(--line-strong); }
+.rail-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.rail-head h1 {
+  margin: 0; font-size: 40px; line-height: 0.96; letter-spacing: -0.028em; font-weight: 500;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 14px; }
+.chip {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--ink-2); border: 1px solid var(--line); padding: 3px 6px;
+}
+
+.rail-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+
+/* Blocks and the crosshair grid marks. */
+.block, .rail-scroll > .group, .rail-scroll > .collapsible {
+  position: relative;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+}
+.block::before, .block::after {
+  content: "+"; position: absolute; top: -7px;
+  font: 400 11px/1 var(--mono); color: var(--tick); opacity: 0.5; pointer-events: none;
+}
+.block::before { left: 6px; }
+.block::after { right: 6px; }
+
+.block-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+.block-head h2, .rail-scroll .group > h2, .rail-scroll summary h2 {
+  margin: 0; font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2);
+}
+.block-note { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.06em; color: var(--ink-3); }
+
+/* Locator plan. */
+.locator { width: 100%; }
+.locator svg { display: block; width: 100%; height: auto; }
+
+/* The verdict is the headline, so it is the one thing set large. */
+.block-verdict .verdict, .block-verdict .finding-toggle {
+  position: static; background: none; border: 0; padding: 0; margin: 0; width: 100%;
+}
+.block-verdict .verdict-figure { font-size: 38px; line-height: 1.02; letter-spacing: -0.02em; }
+.block-verdict .finding-toggle { margin-top: 14px; text-align: left; color: var(--ink-2); }
+
+/* The stage: everything that is not the rail. */
+.stage { position: absolute; inset: 0 0 0 var(--rail-w); z-index: 5; pointer-events: none; }
+.stage > * { pointer-events: auto; }
+.hud {
+  position: absolute; top: 0; right: 0; left: auto; transform: none;
+  background: var(--card-bg-2); border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em; padding: 8px 14px;
+}
+.timestrip {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: var(--card-bg-2); border-top: 1px solid var(--line-strong);
+  padding: 10px 18px;
+}
+.timestrip .timebar { display: flex; align-items: center; gap: 16px; }
+.timestrip .time-slider { flex: 1; }
+
+/* Squared-off controls. */
+.play, .theme-toggle, .ghost, .preset { border: 1px solid var(--line-strong); }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.kpis > * { border: 1px solid var(--line); margin: -0.5px 0 0 -0.5px; padding: 11px 12px; }
+
+.footnote { padding: 16px 22px 26px; }
+
+/* The chart header was wrapping the legend into a column at rail width. */
+.chart-head { flex-wrap: wrap; gap: 6px 12px; }
+.chart-head h3 { font-size: 11px; }
+.legend { display: flex; gap: 12px; white-space: nowrap; font-size: 9.5px; }
+.block::before, .block::after { opacity: 0.8; font-size: 12px; }
+
+/* ==========================================================================
+   Results float over the corridor on the left; the controls rail sits right.
+   You change a thing on the right and watch the numbers move on the left.
+   ========================================================================== */
+
+.rail--controls { inset: 0 0 0 auto; border-right: 0; border-left: 1px solid var(--line-strong); }
+.rail-head--controls { padding: 14px 22px; }
+.rail-head--controls h2 {
+  margin: 0; font-family: var(--mono); font-size: 0.6875rem; font-weight: 400;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2);
+}
+
+.results {
+  position: absolute; top: 0; left: 0; bottom: 0; z-index: 12;
+  width: 392px; display: flex; flex-direction: column;
+  background: var(--card-bg);
+  border-right: 1px solid var(--line-strong);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.results-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+
+.stage { inset: 0 var(--rail-w) 0 392px; }
+
+/* Mono micro-labels are the only labelling device in the system. */
+.kpi-label, .verdict-label, .chip, .block-head h2, .block-note, .hud,
+.rail-scroll .group > h2, .rail-scroll summary h2, .chart-head h3, .legend, .footnote {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 400;
+}
+.footnote, .verdict-body, .hint { text-transform: none; letter-spacing: 0; font-family: var(--font); }
+.kpi-value, .verdict-figure, .rail-head h1 { font-family: var(--font); }
+
+/* The accent is spent on interaction and current state, never at rest. */
+.preset { background: transparent; color: var(--ink-2); }
+.preset:hover { border-color: var(--scheme); color: var(--ink); }
+.preset.on { background: var(--scheme); border-color: var(--scheme); color: var(--bg); }

@@ -30,6 +30,15 @@ ROAD_BBOX = '54.55,-5.95,54.63,-5.75'
 # Newtownards Road within 60 m of each other. The scene is built around them
 # rather than around whichever stretch happens to look busiest: a picture of a
 # different piece of road corroborates nothing.
+# Places a local uses to say where they are on this road.
+LANDMARKS = {
+    'Holywood Arches': (54.59896, -5.88866),
+    'Ballyhackamore': (54.59514, -5.86681),
+    'Knock': (54.59470, -5.85530),
+    'Stormont gates': (54.59528, -5.83478),
+    'Dundonald': (54.59394, -5.77215),
+}
+
 COUNT_POINTS = {
     '918': (54.59478, -5.83513),   # outbound, opposite Summerhill Avenue
     '921': (54.59528, -5.83478),   # inbound, Stormont estate entrance
@@ -39,7 +48,7 @@ COUNT_POINTS = {
 def overpass(query):
     body = urllib.parse.urlencode({'data': query}).encode()
     last = None
-    for attempt in range(2):
+    for attempt in range(3):
         for endpoint in OVERPASS:
             # Overpass rejects the stock urllib agent with a 406.
             req = urllib.request.Request(endpoint, data=body,
@@ -50,8 +59,7 @@ def overpass(query):
             except Exception as e:                      # noqa: BLE001
                 print(f'  {endpoint.split("/")[2]}: {e}')
                 last = e
-        if attempt == 0:
-            time.sleep(5)
+        time.sleep(12 * (attempt + 1))
     raise SystemExit(f'every Overpass mirror failed: {last}')
 
 
@@ -236,6 +244,34 @@ def main():
         wood.append([round(x, 1), round(z, 1)])
     print(f'{len(greens)} green areas and {len(wood)} trees inside the section')
 
+    # The Stormont gates sit at the centre of this section, and they are the
+    # single thing that tells a Belfast audience where they are standing.
+    gates = overpass(
+        f'[out:json][timeout:120];('
+        f'way["name"="Prince of Wales Avenue"](54.590,-5.845,54.610,-5.820);'
+        f'way["barrier"](54.5935,-5.842,54.5975,-5.828);'
+        f'way["building"]["name"~"Parliament"](54.590,-5.845,54.610,-5.820);'
+        f');out geom tags;')['elements']
+
+    avenue, boundary, parliament = [], [], []
+    for el in gates:
+        t = el.get('tags', {})
+        pts = [project((n['lat'], n['lon'])) for n in el.get('geometry') or []]
+        if len(pts) < 2:
+            continue
+        run = [[round(x, 1), round(z, 1)] for x, z in pts
+               if abs(z) <= half * 3 and abs(x) < 900]
+        if len(run) < 2:
+            continue
+        if t.get('name') == 'Prince of Wales Avenue':
+            avenue.append(run)
+        elif t.get('building'):
+            parliament.append(run)
+        elif t.get('barrier'):
+            boundary.append(run)
+    print(f'gates: {len(avenue)} avenue runs, {len(boundary)} boundary runs, '
+          f'{len(parliament)} Parliament outlines')
+
     # A side street is placed at the point where it comes closest to the
     # centreline, which is its junction with the corridor.
     streets = {}
@@ -294,6 +330,46 @@ def main():
     lines.append('/** Individually mapped trees, as [x, z]. */')
     lines.append(f'export const TREES = {json.dumps(wood)};')
     lines.append('')
+    # A locator: the corridor either side of the section, in the same frame, so
+    # the UI can show WHERE on the road this 400 m sits. Asking "am I at
+    # Stormont?" of a 3D view is a fair question; a plan answers it instantly.
+    LOC_RANGE = 3000.0
+    tracks = []
+    for w in ways:
+        pts = [project((n['lat'], n['lon'])) for n in w['geometry']]
+        run = [q for q in pts if abs(q[1]) <= LOC_RANGE and abs(q[0]) < 60]
+        if len(run) < 2:
+            continue
+        tracks.append([[round(x, 1), round(z, 1)] for x, z in run])
+    lines.append('/** The corridor either side of the section, for the locator plan. */')
+    lines.append(f'export const LOCATOR_RANGE = {LOC_RANGE:.0f};')
+    lines.append('export const CORRIDOR = [')
+    for tr in tracks:
+        lines.append('  [' + ','.join(f'[{x},{z}]' for x, z in tr) + '],')
+    lines += ['];', '']
+
+    lines.append('/** Named places along the corridor, to anchor the locator. */')
+    lines.append('export const LANDMARKS = [')
+    for name, ll in LANDMARKS.items():
+        x, z = project(ll)
+        if abs(z) <= LOC_RANGE * 1.05:
+            lines.append(f'  {{ name: {json.dumps(name)}, x: {round(x,1)}, z: {round(z,1)} }},')
+    lines += ['];', '']
+
+    lines.append('/** The count points the model runs on, in the scene frame. */')
+    lines.append('export const COUNT_POINTS = [')
+    for cid, ll in COUNT_POINTS.items():
+        x, z = project(ll)
+        lines.append(f'  {{ id: {json.dumps(cid)}, x: {round(x,1)}, z: {round(z,1)} }},')
+    lines += ['];', '']
+
+    lines.append('/** Stormont: the avenue, the estate boundary, Parliament Buildings. */')
+    for var, data in [('AVENUE', avenue), ('ESTATE_BOUNDARY', boundary), ('PARLIAMENT', parliament)]:
+        lines.append(f'export const {var} = [')
+        for run in data:
+            lines.append('  [' + ','.join(f'[{x},{z}]' for x, z in run) + '],')
+        lines += ['];', '']
+
     lines.append('/** Side streets meeting the corridor, at their junction. */')
     lines.append('export const STREETS = [')
     for name, (x, z) in sorted(streets.items(), key=lambda kv: kv[1][1]):
