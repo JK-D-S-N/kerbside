@@ -10,7 +10,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { FRONTAGE, STREETS, TREES, AVENUE, ESTATE_BOUNDARY } from './frontage.js';
+import { FRONTAGE, STREETS, TREES, AVENUE } from './frontage.js';
 
 export const LANE_W = 3.2;
 export const ROAD_LEN = 800;
@@ -38,7 +38,7 @@ export const LANES = [
 ];
 
 /** Deterministic RNG so the streetscape is identical on every reload. */
-function mulberry32(seed) {
+export function mulberry32(seed) {
   return function () {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -64,6 +64,96 @@ export const JUNCTION_Z = (() => {
     // Merge junctions closer than 40 m; they operate as one stop line.
     .filter((z, i, all) => i === 0 || z - all[i - 1] > 40);
 })();
+
+/**
+ * Side-street cross-section. The corridor's own section, narrowed.
+ *
+ * All three are assumptions. OSM tags no width, lane count or kerb radius on
+ * these arms, and 6 m of carriageway with a tight radius is what a Belfast
+ * residential T-junction is built to.
+ */
+export const SIDE_W = 6.0;
+const SIDE_FOOT = 1.8;
+const KERB_R = 4.5;
+
+/** Half the gap a mouth opens in the corridor kerb and footway. */
+export const MOUTH_HALF = SIDE_W / 2 + KERB_R;
+
+/**
+ * A side street's centreline from the corridor kerb outwards.
+ *
+ * Two corrections to the raw OSM line. The extractor already shifts each
+ * street so its junction sits on x = 0, because the drawn corridor is straight
+ * and the real one curves away from it by up to 30 m. Here the first few
+ * metres are also squared up to the corridor, which is how a mouth is actually
+ * built, and it keeps the mouth centred on the same z the simulation stops
+ * traffic at. Taking the first OSM segment literally skews these arms by
+ * twenty degrees, and that is node placement, not the road.
+ */
+const MOUTH_DEPTH = KERB_R + 2;
+
+function streetLeg(st) {
+  const s = st.side;
+  const leg = [[s * KERB_X, st.z], [s * (KERB_X + MOUTH_DEPTH), st.z]];
+  for (const [x, z] of st.centre || []) {
+    if (s * x > KERB_X + MOUTH_DEPTH + 3) leg.push([x, z]);
+  }
+  return leg;
+}
+
+/**
+ * The junctions actually drawn. Same source as JUNCTION_Z above, so a mouth
+ * and the stop line the simulation queues traffic at cannot drift apart.
+ */
+export const JUNCTIONS = STREETS
+  .map((st) => ({ ...st, leg: streetLeg(st) }))
+  .filter((j) => j.leg.length >= 2 && Math.abs(j.z) < HALF - MOUTH_HALF - 4);
+
+/**
+ * The Prince of Wales Avenue centreline, gates first, for as far up the hill
+ * as this scene is responsible for.
+ *
+ * OSM splits the named way, so the run with the longest reach is the one worth
+ * drawing. It is cut at AVENUE_DRAWN because everything past that belongs to
+ * the wider-area geography, and two drives on the same ground is worse than
+ * one short one.
+ */
+export const AVENUE_DRAWN = 190;
+
+export function avenueLine() {
+  const reach = (run) => (run.length
+    ? Math.max(...run.map((q) => q[0])) - Math.min(...run.map((q) => q[0])) : -1);
+  let best = [];
+  for (const run of AVENUE) if (reach(run) > reach(best)) best = run;
+  if (best.length < 2) return [];
+
+  const line = best[0][0] > best[best.length - 1][0] ? best.slice().reverse() : best.slice();
+  const out = [[FOOTWAY_X, GATES_Z]];
+  let walked = 0;
+  for (const [x, z] of line) {
+    if (x < FOOTWAY_X) continue;
+    const prev = out[out.length - 1];
+    walked += Math.hypot(x - prev[0], z - prev[1]);
+    out.push([x, z]);
+    if (walked > AVENUE_DRAWN) break;
+  }
+  return out;
+}
+
+/** z spans of one side's kerb and footway left over once the mouths are cut. */
+export function kerbSpans(side) {
+  const gaps = JUNCTIONS.filter((j) => j.side === side)
+    .map((j) => [j.z - MOUTH_HALF, j.z + MOUTH_HALF])
+    .sort((a, b) => a[0] - b[0]);
+  const spans = [];
+  let z = -HALF;
+  for (const [a, b] of gaps) {
+    if (a > z) spans.push([z, a]);
+    z = Math.max(z, b);
+  }
+  if (z < HALF) spans.push([z, HALF]);
+  return spans;
+}
 
 /** Kept for the single-stop-line callers; the first junction each way. */
 export const SIGNAL_Z = { inbound: -HALF + 70, outbound: HALF - 70 };
@@ -122,13 +212,18 @@ export function buildScene(renderer) {
   group.add(road);
 
   // ---- Footways -----------------------------------------------------------
+  // Broken at every junction mouth. A side road that runs into an unbroken
+  // footway is the reason a set of lights on this corridor read as arbitrary.
   const footMat = skin('footway', new THREE.MeshStandardMaterial({ roughness: 0.95 }));
+  const footW = FOOTWAY_X - KERB_X;
   for (const side of [-1, 1]) {
-    const w = FOOTWAY_X - KERB_X;
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(w, 0.14, ROAD_LEN), footMat);
-    foot.position.set(side * (KERB_X + w / 2), 0.07, 0);
-    foot.receiveShadow = true;
-    group.add(foot);
+    for (const [z0, z1] of kerbSpans(side)) {
+      if (z1 - z0 < 0.2) continue;
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(footW, 0.14, z1 - z0), footMat);
+      foot.position.set(side * (KERB_X + footW / 2), 0.07, (z0 + z1) / 2);
+      foot.receiveShadow = true;
+      group.add(foot);
+    }
   }
 
   // ---- Lane markings ------------------------------------------------------
@@ -178,9 +273,147 @@ export function buildScene(renderer) {
   // ---- Kerbs --------------------------------------------------------------
   const kerbMat = skin('kerb', new THREE.MeshStandardMaterial({ roughness: 0.9 }));
   for (const side of [-1, 1]) {
-    const k = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.16, ROAD_LEN), kerbMat);
-    k.position.set(side * KERB_X, 0.08, 0);
-    group.add(k);
+    for (const [z0, z1] of kerbSpans(side)) {
+      if (z1 - z0 < 0.2) continue;
+      const k = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.16, z1 - z0), kerbMat);
+      k.position.set(side * KERB_X, 0.08, (z0 + z1) / 2);
+      group.add(k);
+    }
+  }
+
+  // ---- Side roads ---------------------------------------------------------
+  // Real OSM centrelines, drawn to the corridor's own cross-section but
+  // narrower. All three arms are on the south side and all three are priority
+  // T-junctions, so there is nothing opposite them and nothing is invented to
+  // make the picture symmetrical.
+  const roadMat = road.material;
+
+  /**
+   * A flat fan in a junction's local frame: u out from the corridor
+   * centreline, v along the road from the junction. The corner aprons and the
+   * footway that wraps them are both fans, so they share one tessellation.
+   */
+  function junctionFan(side, jz, hub, rim, y) {
+    const pos = [];
+    const push = (q) => pos.push(side * q[0], y, jz + q[1]);
+    for (let i = 0; i < rim.length - 1; i++) {
+      push(hub); push(rim[i]); push(rim[i + 1]);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    // Flat and face up. Computing them would flip half the fans, because the
+    // winding depends on which side of the road the junction is on.
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(
+      pos.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
+    return g;
+  }
+
+  /**
+   * Carriageway, kerbs and footway laid along a polyline.
+   *
+   * The default height sits the surface under the corridor's own overlays.
+   * Segments overrun each other at bends, so the first one reaches back into
+   * the carriageway, and at the same height it would fight the bus lane strip.
+   */
+  function ribbon(line, width, foot, target, y = 0.004) {
+    for (let i = 0; i < line.length - 1; i++) {
+      const [x0, z0] = line[i];
+      const [x1, z1] = line[i + 1];
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      if (len < 0.3) continue;
+      const yaw = Math.atan2(x1 - x0, z1 - z0);
+      const mx = (x0 + x1) / 2;
+      const mz = (z0 + z1) / 2;
+      // Segments overrun each other by a carriageway width, or every bend
+      // opens a wedge of bare ground between two rectangles.
+      const carr = new THREE.Mesh(new THREE.BoxGeometry(width, 0.02, len + width), roadMat);
+      carr.position.set(mx, y, mz);
+      carr.rotation.y = yaw;
+      carr.receiveShadow = true;
+      target.add(carr);
+      if (!foot) continue;
+
+      const px = Math.cos(yaw);
+      const pz = -Math.sin(yaw);
+      for (const sgn of [-1, 1]) {
+        const kd = sgn * (width / 2 + 0.12);
+        const k = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.16, len + 0.3), kerbMat);
+        k.position.set(mx + px * kd, 0.08, mz + pz * kd);
+        k.rotation.y = yaw;
+        target.add(k);
+
+        const fd = sgn * (width / 2 + 0.25 + foot / 2);
+        const f = new THREE.Mesh(new THREE.BoxGeometry(foot, 0.14, len + foot), footMat);
+        f.position.set(mx + px * fd, 0.07, mz + pz * fd);
+        f.rotation.y = yaw;
+        f.receiveShadow = true;
+        target.add(f);
+      }
+    }
+  }
+
+  const sideRoads = new THREE.Group();
+  group.add(sideRoads);
+  const ARC_STEPS = 8;
+
+  for (const j of JUNCTIONS) {
+    ribbon(j.leg, SIDE_W, SIDE_FOOT, sideRoads);
+
+    for (const c of [-1, 1]) {
+      // The fillet is the square corner between the two kerb lines with the
+      // radius taken out of it, so the arc bulges into the footway and the
+      // road takes the rest.
+      const rim = [];
+      const band = [];
+      for (let k = 0; k <= ARC_STEPS; k++) {
+        const a = (k / ARC_STEPS) * (Math.PI / 2);
+        const cu = Math.cos(a);
+        const su = Math.sin(a);
+        rim.push([KERB_X + KERB_R * (1 - cu), c * (MOUTH_HALF - KERB_R * su)]);
+        const r = KERB_R - 0.25;
+        band.push([KERB_X + KERB_R - r * cu, c * (MOUTH_HALF - r * su)]);
+      }
+      const apron = new THREE.Mesh(
+        junctionFan(j.side, j.z, [KERB_X, c * SIDE_W / 2], rim, 0.008), roadMat
+      );
+      apron.receiveShadow = true;
+      sideRoads.add(apron);
+
+      // The footway wraps the radius rather than stopping dead at it.
+      const wrap = new THREE.Mesh(
+        junctionFan(j.side, j.z, [KERB_X + KERB_R, c * MOUTH_HALF], band, 0.14), footMat
+      );
+      wrap.receiveShadow = true;
+      sideRoads.add(wrap);
+
+      // Kerb stones round the radius, which is what makes it read as a corner
+      // rather than as a hole in the footway. Each one lies along the tangent,
+      // so the yaw has to come off the arc, not off the sweep angle.
+      const stoneLen = (KERB_R * Math.PI) / (2 * ARC_STEPS) + 0.1;
+      for (let k = 0; k < ARC_STEPS; k++) {
+        const a = ((k + 0.5) / ARC_STEPS) * (Math.PI / 2);
+        const stone = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.16, stoneLen), kerbMat);
+        stone.position.set(
+          j.side * (KERB_X + KERB_R * (1 - Math.cos(a))),
+          0.08,
+          j.z + c * (MOUTH_HALF - KERB_R * Math.sin(a))
+        );
+        stone.rotation.y = Math.atan2(j.side * Math.sin(a), -c * Math.cos(a));
+        sideRoads.add(stone);
+      }
+    }
+
+    // Give way, not a stop line. These arms are priority-controlled: two rows
+    // of transverse dashes across the side road, which is what is painted
+    // there. The corridor's own signals are drawn separately.
+    for (const row of [1.1, 1.75]) {
+      for (let n = -2; n <= 2; n++) {
+        const gw = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.6), markMat);
+        gw.rotation.x = -Math.PI / 2;
+        gw.position.set(j.side * (KERB_X + row), 0.018, j.z + n * 0.9);
+        sideRoads.add(gw);
+      }
+    }
   }
 
   // ---- Frontage -----------------------------------------------------------
@@ -274,8 +507,8 @@ export function buildScene(renderer) {
 
   // ---- Stormont ----------------------------------------------------------
   // The gates are the one thing on this road that tells a Belfast audience
-  // exactly where they are standing. Piers, railings along the estate wall,
-  // and the avenue running away up the hill.
+  // exactly where they are standing. Piers, the gate leaves, and the avenue
+  // running away up the hill to Parliament Buildings.
   const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6a7180, roughness: 0.92 });
   const ironMat = new THREE.MeshStandardMaterial({ color: 0x22262e, roughness: 0.5, metalness: 0.6 });
   const gateGroup = new THREE.Group();
@@ -294,43 +527,38 @@ export function buildScene(renderer) {
       leaf.position.set(side * (FOOTWAY_X + 2.2), 1.9, GATES_Z + off);
       gateGroup.add(leaf);
     }
-    // The avenue, as a pale strip running away from the road.
-    const avenue = new THREE.Mesh(
-      new THREE.PlaneGeometry(150, 13),
-      new THREE.MeshStandardMaterial({ color: 0x4a5260, roughness: 0.95 })
-    );
-    avenue.rotation.x = -Math.PI / 2;
-    avenue.position.set(side * (FOOTWAY_X + 78), 0.03, GATES_Z);
-    gateGroup.add(avenue);
+    // The avenue, on its real centreline rather than a fixed strip. It is what
+    // leads the eye to Parliament Buildings at the top, so where it points
+    // matters: it does not run square to the road, it swings north.
+    const drive = avenueLine();
+    if (drive.length >= 2) ribbon(drive, 13, 0, gateGroup, 0.03);
 
-    // Its lime avenue, which is what you actually see from the road.
+    // Its lime avenue, which is what you actually see from the road. Only the
+    // first stretch; past that they are a smudge and cost 200 draw calls.
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3a3128, roughness: 1 });
     const leafMat = new THREE.MeshStandardMaterial({ color: 0x2f4a2c, roughness: 1 });
-    for (let d = 12; d < 150; d += 13) {
-      for (const w of [-9.5, 9.5]) {
-        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 4.4, 6), trunkMat);
-        trunk.position.set(side * (FOOTWAY_X + d), 2.2, GATES_Z + w);
-        gateGroup.add(trunk);
-        const crown = new THREE.Mesh(new THREE.SphereGeometry(3.1, 8, 6), leafMat);
-        crown.position.set(side * (FOOTWAY_X + d), 6.1, GATES_Z + w);
-        crown.castShadow = true;
-        gateGroup.add(crown);
+    let walked = 0;
+    for (let i = 0; i < drive.length - 1 && walked < AVENUE_DRAWN; i++) {
+      const [x0, z0] = drive[i];
+      const [x1, z1] = drive[i + 1];
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      if (len < 0.5) continue;
+      const ux = (x1 - x0) / len;
+      const uz = (z1 - z0) / len;
+      for (let d = 13 - (walked % 13); d < len && walked + d < AVENUE_DRAWN; d += 13) {
+        for (const w of [-9.5, 9.5]) {
+          const tx = x0 + ux * d + uz * w;
+          const tz = z0 + uz * d - ux * w;
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 4.4, 6), trunkMat);
+          trunk.position.set(tx, 2.2, tz);
+          gateGroup.add(trunk);
+          const crown = new THREE.Mesh(new THREE.SphereGeometry(3.1, 8, 6), leafMat);
+          crown.position.set(tx, 6.1, tz);
+          crown.castShadow = true;
+          gateGroup.add(crown);
+        }
       }
-    }
-  }
-
-  // Estate railings along the boundary, where it runs beside the road.
-  for (const run of ESTATE_BOUNDARY) {
-    for (let i = 0; i < run.length - 1; i++) {
-      const [x1, z1] = run[i];
-      const [x2, z2] = run[i + 1];
-      if (Math.abs(z1) > HALF || Math.abs(x1) > 46 || Math.abs(x1) < FOOTWAY_X - 1) continue;
-      const len = Math.hypot(x2 - x1, z2 - z1);
-      if (len < 1 || len > 60) continue;
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.9, len), ironMat);
-      wall.position.set((x1 + x2) / 2, 0.95, (z1 + z2) / 2);
-      wall.rotation.y = Math.atan2(x2 - x1, z2 - z1);
-      gateGroup.add(wall);
+      walked += len;
     }
   }
   group.add(gateGroup);
@@ -563,8 +791,8 @@ export function applyTimeOfDay(world, hourFloat, renderer) {
 
   world.scene.background = sky;
   world.scene.fog.color = fogCol;
-  world.scene.fog.near = world.theme === 'light' ? 320 : 150;
-  world.scene.fog.far = world.theme === 'light' ? 1250 : 720;
+  world.scene.fog.near = world.theme === 'light' ? 420 : 260;
+  world.scene.fog.far = world.theme === 'light' ? 2200 : 1700;
   renderer.setClearColor(sky, 1);
 
   world.sun.color = sunCol;

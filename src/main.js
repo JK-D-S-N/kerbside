@@ -243,55 +243,99 @@ function paintKpis(scheme, baseline) {
     .join('');
 }
 
+/** Seconds of delay per person moved. Without it the daily aggregate is unreadable. */
+const perPersonSeconds = (deltaHours, people) => (people > 0 ? (deltaHours * 3600) / people : 0);
+
+/** Seconds to one decimal place under ten, whole seconds above it. */
+function secondsText(seconds) {
+  const n = Math.abs(seconds);
+  const shown = fmt(n, n < 10 ? 1 : 0);
+  return `${shown} second${shown === '1.0' ? '' : 's'}`;
+}
+
+/**
+ * The verdict card answers one question: better or worse than doing nothing.
+ *
+ * The headline word is taken from the sign of the delay difference, never from
+ * the break-even solver, so the word and the number under it cannot disagree.
+ * Break-even is supporting detail. It is the answer to a second question, and
+ * leading with it left the first one unanswered.
+ *
+ * Both sides are always shown. The lane costs time and it moves more people.
+ * A card that prints one without the other is an argument, not a model.
+ */
 function paintVerdict(be, scheme, baseline) {
   const card = $('verdict');
+  const label = $('verdictLabel');
   const figure = $('verdictFigure');
+  const delta = $('verdictDelta');
   const body = $('verdictBody');
+  const note = $('verdictNote');
   const cfg = state.config;
   const cap = state.assumptions.busCapacity;
-  card.classList.remove('is-winning', 'is-impossible');
+  card.classList.remove('is-better', 'is-worse', 'is-level');
 
   const delayDelta = scheme.totals.personHoursDelay - baseline.totals.personHoursDelay;
   const peopleDelta = scheme.totals.peopleMoved - baseline.totals.peopleMoved;
+  const people = scheme.totals.peopleMoved;
 
-  if (!cfg.busLaneOn) {
-    figure.innerHTML = 'No lane';
+  // No reallocation of any kind is the comparison case, so it cannot differ
+  // from itself. Say so rather than printing a verdict of zero.
+  if (!cfg.busLaneOn && !cfg.bikeLaneOn) {
+    label.textContent = 'The baseline';
+    figure.textContent = 'No change';
+    delta.textContent = 'Two general traffic lanes, buses in the traffic';
     body.innerHTML =
-      'This is the do-nothing case. Turn the bus lane on to see what it costs and what it buys.';
+      `The corridor moves <b>${fmt(people)}</b> people a day like this. ` +
+      'Every other scenario on this page is measured against it. ' +
+      'Turn the bus lane on to see what it costs and what it buys.';
+    note.hidden = true;
     return;
   }
 
-  if (be.impossible) {
-    card.classList.add('is-impossible');
-    figure.innerHTML = 'Never';
-    body.innerHTML =
-      `Even at a full ${cap}-passenger Glider on every service, this lane costs more person-time than it saves. ` +
-      `At these settings the bus is not carrying enough people to be worth a lane.`;
-    return;
+  label.textContent = 'Versus no reallocation';
+
+  // A hair either side of zero is not a result. Half a person-hour across a
+  // day is under a tenth of a second each.
+  const level = Math.abs(delayDelta) < 0.5;
+  const worse = delayDelta > 0;
+  card.classList.add(level ? 'is-level' : worse ? 'is-worse' : 'is-better');
+
+  figure.textContent = level ? 'Level' : worse ? 'Worse' : 'Better';
+  delta.textContent = level
+    ? 'No measurable difference in delay'
+    : `${fmt(Math.abs(delayDelta))} ${worse ? 'more' : 'fewer'} person-hours of delay a day`;
+
+  const seconds = perPersonSeconds(delayDelta, people);
+  const scale = level || Math.abs(seconds) < 0.05
+    ? `Delay lands in the same place either way, across the <b>${fmt(people)}</b> people the corridor moves in a day.`
+    : `About <b>${secondsText(seconds)}</b> ${worse ? 'more' : 'less'} for each of the ` +
+      `<b>${fmt(people)}</b> people the corridor moves in a day.`;
+
+  const reach =
+    peopleDelta > 0.5
+      ? `It also moves <b>${fmt(peopleDelta)}</b> more people a day than doing nothing.`
+      : peopleDelta < -0.5
+        ? `It also moves <b>${fmt(-peopleDelta)}</b> fewer people a day than doing nothing.`
+        : 'It moves no more people a day than doing nothing.';
+
+  body.innerHTML = `${scale} ${reach}`;
+
+  note.hidden = false;
+  const buses = cfg.busServiceOn ? cfg.busesPerHour : 0;
+  if (buses === 0) {
+    note.innerHTML = 'Break-even: none. With no bus service the lane carries nobody.';
+  } else if (be.impossible) {
+    note.innerHTML =
+      `Break-even: none. At <b>${buses}</b> buses an hour, a full ${cap}-seat Glider on every ` +
+      'service still costs more time than it saves.';
+  } else if (be.alreadyWinning) {
+    note.innerHTML = 'Break-even: none needed. This beats doing nothing at any load.';
+  } else {
+    note.innerHTML =
+      `Break-even: <b>${fmt(be.load, 0)}</b> passengers a bus at ${buses} an hour, ` +
+      `${Math.round((be.load / cap) * 100)}% of a Glider. You are modelling <b>${cfg.busLoad}</b>.`;
   }
-
-  if (be.alreadyWinning) {
-    card.classList.add('is-winning');
-    figure.innerHTML = 'Already worth it';
-    body.innerHTML =
-      `The scheme beats doing nothing on total person-delay at any load, and moves ` +
-      `<b>${fmt(peopleDelta)}</b> more people a day.`;
-    return;
-  }
-
-  const perHour = be.load * (cfg.busServiceOn ? cfg.busesPerHour : 0);
-  const pct = Math.round((be.load / cap) * 100);
-  const current = cfg.busLoad;
-  const verdictWord = current >= be.load ? 'clears' : 'misses';
-
-  figure.innerHTML = `${fmt(be.load, 0)} <span class="unit">passengers per bus</span>`;
-  body.innerHTML =
-    `That is <b>${pct}%</b> of a ${cap}-seat Glider, or <b>${fmt(perHour)}</b> people an hour each way, ` +
-    `before this lane saves more person-time than it costs. ` +
-    `You are modelling <b>${current}</b>, which ${verdictWord} it` +
-    (current >= be.load
-      ? `, saving <b>${fmt(Math.abs(delayDelta))}</b> person-hours a day.`
-      : ` by <b>${fmt(be.load - current, 0)}</b>. As modelled the lane costs <b>${fmt(delayDelta)}</b> person-hours a day and moves <b>${fmt(peopleDelta)}</b> more people.`);
 }
 
 function paintChart(scheme, baseline) {
@@ -415,7 +459,6 @@ function syncControlsFromState() {
   const c = state.config;
   $('busLaneOn').checked = c.busLaneOn;
   $('busLanePeakOnly').checked = c.busLanePeakOnly;
-  $('bikeLaneOn').checked = c.bikeLaneOn;
   $('busServiceOn').checked = c.busServiceOn;
   $('busLaneStart').value = c.busLaneStart;
   $('busLaneEnd').value = c.busLaneEnd;
@@ -471,7 +514,6 @@ function bindRange(id, key, transform = Number) {
 
 bindToggle('busLaneOn', 'busLaneOn');
 bindToggle('busLanePeakOnly', 'busLanePeakOnly');
-bindToggle('bikeLaneOn', 'bikeLaneOn');
 bindToggle('busServiceOn', 'busServiceOn');
 bindRange('busLaneStart', 'busLaneStart');
 bindRange('busLaneEnd', 'busLaneEnd');

@@ -6,6 +6,8 @@ import {
   busFreeFlowJourneyMin, carEmissionsPerKm, evaluateHour, runDay, solveBreakEven,
 } from '../src/model.js';
 import { COUNTS } from '../src/counts.js';
+import { JUNCTIONS, JUNCTION_Z, MOUTH_HALF, HALF, ROAD_LEN, KERB_X } from '../src/scene.js';
+import { STOP_LINES } from '../src/vehicles.js';
 
 const A = DEFAULT_ASSUMPTIONS;
 
@@ -229,4 +231,140 @@ test('demand multiplier moves delay in the right direction', () => {
   const quiet = runDay(counts, { ...baseCfg, demandMultiplier: 0.7 }, A);
   const busy = runDay(counts, { ...baseCfg, demandMultiplier: 1.3 }, A);
   assert.ok(busy.totals.personHoursDelay > quiet.totals.personHoursDelay);
+});
+
+// ---------------------------------------------------------------------------
+// Geometry. The picture only corroborates the numbers if the junction a driver
+// can see is the junction the simulation stops them at, so this is checked
+// arithmetically rather than by looking at it.
+
+test('every drawn junction is one the simulation stops traffic at', () => {
+  assert.ok(JUNCTIONS.length >= 3, `${JUNCTIONS.length} junctions drawn`);
+  for (const j of JUNCTIONS) {
+    assert.ok(JUNCTION_Z.some((z) => Math.abs(z - j.z) < 1e-9),
+      `${j.name} at z=${j.z} is not in JUNCTION_Z`);
+  }
+});
+
+test('the junction mouth is centred on the stop line, not near it', () => {
+  const zOf = {
+    inbound: (s) => HALF - s,
+    outbound: (s) => s - HALF,
+  };
+  for (const j of JUNCTIONS) {
+    // The leg leaves the corridor at the kerb, square to it, on the mouth axis.
+    assert.equal(j.leg[0][1], j.z, `${j.name} mouth starts off its own stop line`);
+    assert.equal(Math.abs(j.leg[0][0]), KERB_X, `${j.name} leg does not start at the kerb`);
+
+    for (const dir of ['inbound', 'outbound']) {
+      const lines = STOP_LINES[dir].map(zOf[dir]);
+      const hit = lines.find((z) => Math.abs(z - j.z) < 1e-9);
+      assert.ok(hit !== undefined, `${j.name}: no ${dir} stop line at z=${j.z}`);
+      assert.ok(Math.abs(hit - j.z) < MOUTH_HALF,
+        `${j.name}: ${dir} stop line outside the mouth`);
+    }
+  }
+});
+
+test('stop lines only exist where a junction is drawn or the gates are', () => {
+  const drawn = new Set(JUNCTIONS.map((j) => j.z));
+  for (const s of STOP_LINES.inbound) {
+    const z = HALF - s;
+    assert.ok(drawn.has(z) || JUNCTION_Z.some((q) => Math.abs(q - z) < 1e-9),
+      `inbound stop at z=${z} belongs to nothing`);
+  }
+  assert.ok(STOP_LINES.inbound.every((s) => s > 20 && s < ROAD_LEN - 20));
+});
+
+// ---------------------------------------------------------------------------
+// Cycles and motorcycles in the bus lane. Both are legal in one in Northern
+// Ireland, and a bus stuck behind a cycle has to use the general lane to get
+// past, which is a cost of the bus lane that the analytic model does not see.
+
+test('cycles and motorcycles run in the bus lane, and only there', async () => {
+  const THREE = await import('three');
+  const { TrafficSim } = await import('../src/vehicles.js');
+  const sim = new TrafficSim(new THREE.Group());
+  sim.configure({
+    busLaneActive: true, bikeLaneOn: false, cycleTimeSec: 90, greenFraction: 0.55,
+    freeFlowMs: 13.3, busesPerHour: 10, demand: { inbound: 1100, outbound: 1100 },
+    resetDensity: true,
+  });
+
+  const bikeLanes = new Set();
+  let cycles = 0;
+  let motos = 0;
+  for (const lane of sim.lanes) {
+    for (const v of lane.vehicles) {
+      if (v.type !== 'cycle' && v.type !== 'moto') continue;
+      bikeLanes.add(lane.id);
+      if (v.type === 'cycle') cycles++; else motos++;
+    }
+  }
+  assert.ok(cycles > 0, 'no cycles on the road');
+  assert.ok(motos > 0, 'no motorcycles on the road');
+  for (const id of bikeLanes) {
+    assert.ok(sim.lanes.find((l) => l.id === id).nearside, `${id} is not the bus lane`);
+  }
+});
+
+test('a cycle is slow, a motorcycle is not, and that is the whole mechanism', async () => {
+  const THREE = await import('three');
+  const { TrafficSim } = await import('../src/vehicles.js');
+  const sim = new TrafficSim(new THREE.Group());
+  sim.freeFlowMs = 13.3;
+  assert.ok(sim.desiredSpeed('cycle') >= 6 && sim.desiredSpeed('cycle') <= 8,
+    `cycle wants ${sim.desiredSpeed('cycle')} m/s`);
+  assert.ok(sim.desiredSpeed('moto') >= sim.desiredSpeed('bus'),
+    'a motorcycle should not be holding a bus up');
+  assert.ok(sim.desiredSpeed('bus') > sim.desiredSpeed('cycle') + 1.5,
+    'a bus has no reason to overtake');
+});
+
+test('a bus pulls out into the general lane to pass a cycle', async () => {
+  const THREE = await import('three');
+  const { TrafficSim } = await import('../src/vehicles.js');
+  const sim = new TrafficSim(new THREE.Group());
+  // Roughly the 08:00 corridor: one general lane each way, signals platooning
+  // it, and a bus every three minutes. The simulation is seeded, so this runs
+  // the same way every time.
+  sim.configure({
+    busLaneActive: true, bikeLaneOn: false, cycleTimeSec: 90, greenFraction: 0.55,
+    freeFlowMs: 13.3, busesPerHour: 20, demand: { inbound: 750, outbound: 750 },
+    resetDensity: true,
+  });
+
+  let overtakes = 0;
+  let maxOffset = 0;
+  let heldUp = 0;
+  const seen = new Set();
+  for (let i = 0; i < 30000; i++) {
+    sim.step(0.05);
+    for (const lane of sim.lanes) {
+      for (const v of lane.vehicles) {
+        if (v.type !== 'bus') continue;
+        maxOffset = Math.max(maxOffset, Math.abs(v.off || 0));
+        if (Math.abs(v.off || 0) > 1) heldUp++;
+        if (v.overtaking && !seen.has(v)) { seen.add(v); overtakes++; }
+      }
+    }
+  }
+  assert.ok(overtakes > 0, 'no bus ever pulled out for a cycle');
+  assert.ok(maxOffset > 3, `bus only moved ${maxOffset.toFixed(2)} m sideways`);
+  assert.ok(heldUp > 0, 'no time spent obstructing the general lane');
+});
+
+test('no cycles are put in the nearside lane when the bus lane is off', async () => {
+  const THREE = await import('three');
+  const { TrafficSim } = await import('../src/vehicles.js');
+  const sim = new TrafficSim(new THREE.Group());
+  sim.configure({
+    busLaneActive: false, bikeLaneOn: false, cycleTimeSec: 90, greenFraction: 0.55,
+    freeFlowMs: 13.3, busesPerHour: 10, demand: { inbound: 1100, outbound: 1100 },
+    resetDensity: true,
+  });
+  for (let i = 0; i < 600; i++) sim.step(0.1);
+  const bikes = sim.lanes.flatMap((l) => l.vehicles)
+    .filter((v) => v.type === 'cycle' || v.type === 'moto');
+  assert.equal(bikes.length, 0, `${bikes.length} bikes with the bus lane off`);
 });

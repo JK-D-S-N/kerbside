@@ -26,25 +26,40 @@ export const PRESETS = [
     id: 'as-built',
     name: 'As built',
     detail: 'Bus lane 07:00 to 19:00, Monday to Saturday. What is on the ground today.',
-    config: { busLaneOn: true, busLanePeakOnly: false, busLaneStart: 7, busLaneEnd: 19, bikeLaneOn: false },
+    config: {
+      busLaneOn: true, busLanePeakOnly: false, busLaneStart: 7, busLaneEnd: 19,
+      bikeLaneOn: false, busesPerHour: 10, busLoad: 40,
+    },
   },
   {
     id: 'peak-only',
     name: 'Peak only',
     detail: 'Bus lane 07:00 to 10:00 and 16:00 to 19:00. Two lanes for general traffic the rest of the day.',
-    config: { busLaneOn: true, busLanePeakOnly: true, bikeLaneOn: false },
+    config: {
+      busLaneOn: true, busLanePeakOnly: true,
+      bikeLaneOn: false, busesPerHour: 10, busLoad: 40,
+    },
   },
   {
     id: 'no-lane',
     name: 'No bus lane',
     detail: 'Two general traffic lanes all day. Buses run in traffic and lose patronage.',
-    config: { busLaneOn: false, busLanePeakOnly: false, bikeLaneOn: false },
+    config: {
+      busLaneOn: false, busLanePeakOnly: false,
+      bikeLaneOn: false, busesPerHour: 10, busLoad: 40,
+    },
   },
   {
-    id: 'bus-and-bike',
-    name: 'Bus and bike',
-    detail: 'Bus lane plus a protected cycle lane. General traffic keeps the minimum one lane.',
-    config: { busLaneOn: true, busLanePeakOnly: false, busLaneStart: 7, busLaneEnd: 19, bikeLaneOn: true },
+    // The break-even solver says an all-day lane cannot pay for itself at ten
+    // buses an hour, at any load. This preset is the answer to "then what
+    // would?", so it sets the service level rather than asserting the number.
+    id: 'what-it-takes',
+    name: 'What it would take',
+    detail: 'Bus lane 07:00 to 19:00, a Glider every four minutes, 85 aboard at the busiest hour. Roughly the point where the lane stops costing time.',
+    config: {
+      busLaneOn: true, busLanePeakOnly: false, busLaneStart: 7, busLaneEnd: 19,
+      bikeLaneOn: false, busesPerHour: 15, busLoad: 85,
+    },
   },
 ];
 

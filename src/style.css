@@ -164,13 +164,28 @@ html, body {
 }
 .verdict-figure {
   font-size: 30px; font-weight: 660; letter-spacing: -0.03em; line-height: 1.12;
-  margin: 6px 0 7px; font-variant-numeric: tabular-nums;
+  margin: 6px 0 3px; font-variant-numeric: tabular-nums;
 }
 .verdict-figure .unit { font-size: 14px; font-weight: 500; color: var(--ink-2); letter-spacing: 0; }
 .verdict-body { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
 .verdict-body b { color: var(--ink); font-weight: 600; }
-.verdict.is-winning { border-left-color: var(--good-bright); }
-.verdict.is-impossible { border-left-color: var(--bad); }
+
+/* The size of the difference, directly under the word. Same semantic tokens as
+   the KPI deltas, so better and worse mean one colour each across the page. */
+.verdict-delta {
+  font-size: 14px; font-weight: 600; line-height: 1.35; letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums; color: var(--ink-2); margin: 0 0 10px;
+}
+.verdict.is-worse .verdict-figure, .verdict.is-worse .verdict-delta { color: var(--bad); }
+.verdict.is-better .verdict-figure, .verdict.is-better .verdict-delta { color: var(--good-bright); }
+.verdict.is-level .verdict-delta { color: var(--ink-3); }
+
+/* Break-even is supporting detail now, so it is set as supporting detail. */
+.verdict-note {
+  margin: 11px 0 0; padding-top: 10px; border-top: 1px solid var(--line);
+  font-size: 11.5px; line-height: 1.5; color: var(--ink-3);
+}
+.verdict-note b { color: var(--ink-2); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ---- Finding ---------------------------------------------------------- */
 .finding-toggle {
@@ -721,3 +736,10 @@ input[type="range"]::-moz-range-thumb { border-radius: 50% !important; }
 :root { --hud-offset: 20px; }
 .rail-head--controls { padding: var(--hud-offset) 22px; }
 .hud { top: var(--hud-offset); right: var(--hud-offset); }
+
+/* The blanket square rule squared the switch track while the thumb stayed a
+   circle, which read as a circle sitting inside a box rather than as a switch.
+   A pill track is a deliberate exception, asked for by name: the conventional
+   toggle. Nothing else gets a radius from here. */
+.switch .track { border-radius: 999px !important; }
+.switch .thumb { border-radius: 50% !important; }

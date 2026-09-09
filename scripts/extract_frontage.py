@@ -35,7 +35,9 @@ LANDMARKS = {
     'Holywood Arches': (54.59896, -5.88866),
     'Ballyhackamore': (54.59514, -5.86681),
     'Knock': (54.59470, -5.85530),
-    'Stormont gates': (54.59528, -5.83478),
+    # The junction node where Prince of Wales Avenue meets the A20, not
+    # count point 921. They are 349 m apart and this one is the gates.
+    'Stormont gates': (54.5954309, -5.8402692),
     'Dundonald': (54.59394, -5.77215),
 }
 
@@ -154,6 +156,140 @@ def footprints(elements, project, half):
     return out
 
 
+# Parliament Buildings is a multipolygon relation, not a way, and it sits about
+# a kilometre up Prince of Wales Avenue rather than beside the carriageway. The
+# earlier query asked for ways inside a box that stopped short of it on both
+# counts, which is why PARLIAMENT came out empty. It is asked for by name here,
+# and by relation as well as way, so neither mistake can recur silently.
+PARLIAMENT_BBOX = '54.598,-5.845,54.612,-5.820'
+
+
+def outer_rings(el):
+    """Closed rings for a way or for the outer members of a multipolygon."""
+    if el['type'] == 'way':
+        return [el.get('geometry') or []]
+    return [m.get('geometry') or [] for m in el.get('members', [])
+            if m.get('role') == 'outer']
+
+
+def ground_height(points):
+    """
+    Metres above sea level for each lat/lon, from the Copernicus 30 m DEM.
+
+    Stormont is on a rise and the model has no terrain, so the height the
+    building sits at has to come from somewhere. Falling back to a flat plain
+    would put Parliament Buildings in a hollow, which is the one thing anyone
+    who has driven up that avenue would notice.
+    """
+    lat = ','.join(f'{p[0]:.6f}' for p in points)
+    lon = ','.join(f'{p[1]:.6f}' for p in points)
+    url = f'https://api.open-meteo.com/v1/elevation?latitude={lat}&longitude={lon}'
+    req = urllib.request.Request(url, headers={'User-Agent': 'kerbside/0.1 (corridor model)'})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)['elevation']
+
+
+# How far a side road is carried away from the corridor. Past about 100 m it is
+# behind the frontage and doing no work, and the point of drawing it at all is
+# that a set of lights on an unbroken carriageway reads as arbitrary.
+STREET_REACH = 110.0
+DEFAULT_STREET_WIDTH = 6.0    # assumption: a Belfast residential side street
+
+
+def side_street_legs(project, half, streets):
+    """
+    Centreline for each street that meets the corridor, in the scene frame.
+
+    Every way carrying the name is taken, not just the one holding the junction
+    node, because OSM splits a street at every change of tagging.
+    """
+    if not streets:
+        return {}
+    names = '|'.join(sorted(streets))
+    els = overpass(
+        f'[out:json][timeout:120];'
+        f'way["highway"]["name"~"^({names})$"]({ROAD_BBOX});out geom tags;')['elements']
+
+    pool = {name: [] for name in streets}
+    for el in els:
+        name = el.get('tags', {}).get('name')
+        if name not in pool:
+            continue
+        jx, jz = streets[name]
+        pts = [project((n['lat'], n['lon'])) for n in el.get('geometry') or []]
+        # Shift onto the drawn centreline before clipping, or the reach is
+        # measured from the wrong place.
+        pts = [(x - jx, z) for x, z in pts
+               if abs(x - jx) <= STREET_REACH and abs(z) <= half]
+        if len(pts) < 2:
+            continue
+        # Node order within a way is the real geometry, so keep it and only
+        # decide which end is the junction.
+        if math.hypot(*(pts[0][0], pts[0][1] - jz)) > math.hypot(*(pts[-1][0], pts[-1][1] - jz)):
+            pts.reverse()
+        pool[name].append(pts)
+
+    out = {}
+    for name, runs in pool.items():
+        if not runs:
+            continue
+        jx, jz = streets[name]
+        runs.sort(key=lambda r: math.hypot(r[0][0], r[0][1] - jz))
+        run, last = [], None
+        for r in runs:
+            for x, z in r:
+                if last is not None and math.hypot(x - last[0], z - last[1]) < 1.5:
+                    continue
+                run.append([round(x, 1), round(z, 1)])
+                last = (x, z)
+        if len(run) < 2:
+            continue
+        out[name] = run
+        print(f'  {name}: {len(run)} centreline points, reaching '
+              f'{max(abs(p[0]) for p in run):.0f} m from the corridor')
+    return out
+
+
+def parliament_buildings(project):
+    """The real footprint, its height, and how far it stands above the road."""
+    els = overpass(
+        f'[out:json][timeout:120];('
+        f'rel["building"]["name"="Parliament Buildings"]({PARLIAMENT_BBOX});'
+        f'way["building"]["name"="Parliament Buildings"]({PARLIAMENT_BBOX});'
+        # `out geom tags` prints tags ONLY, which silently drops a relation's
+        # members. Plain `out geom` gives body, geometry and tags together.
+        f');out geom;')['elements']
+    rings, tags, geo = [], {}, []
+    for el in els:
+        tags = el.get('tags', {}) or tags
+        for g in outer_rings(el):
+            if len(g) < 4:
+                continue
+            geo += g
+            pts = [project((n['lat'], n['lon'])) for n in g]
+            if pts[0] == pts[-1]:
+                pts = pts[:-1]
+            rings.append([[round(x, 1), round(z, 1)] for x, z in pts])
+    if not rings:
+        print('  Parliament Buildings: NOTHING RETURNED')
+        return [], {}
+
+    lat = sum(n['lat'] for n in geo) / len(geo)
+    lon = sum(n['lon'] for n in geo) / len(geo)
+    road = COUNT_POINTS['921']
+    try:
+        elev = ground_height([(lat, lon), road])
+        rise = round(elev[0] - elev[1], 1)
+    except Exception as e:                              # noqa: BLE001
+        print(f'  elevation lookup failed ({e}), falling back to 63 m')
+        rise = 63.0
+    meta = {'height': round(height_of(tags), 1), 'rise': rise,
+            'name': tags.get('name', 'Parliament Buildings')}
+    print(f'Parliament Buildings: {len(rings)} outer ring(s), '
+          f"{meta['height']} m tall, {rise} m above the carriageway")
+    return rings, meta
+
+
 def main():
     ways = overpass(
         f'[out:json][timeout:120];'
@@ -246,38 +382,27 @@ def main():
 
     # The Stormont gates sit at the centre of this section, and they are the
     # single thing that tells a Belfast audience where they are standing.
+    # Only the avenue. An earlier version also pulled way["barrier"] over a
+    # bounding box, which returns every garden fence and hedge in Ballymiscaw
+    # rather than the estate wall, and the scene scattered them as black
+    # fragments across the footway. No wall beats the wrong wall.
     gates = overpass(
         f'[out:json][timeout:120];('
         f'way["name"="Prince of Wales Avenue"](54.590,-5.845,54.610,-5.820);'
-        f'way["barrier"](54.5935,-5.842,54.5975,-5.828);'
-        f'way["building"](54.5975,-5.8395,54.6005,-5.8340);'
         f');out geom tags;')['elements']
 
-    avenue, boundary, parliament = [], [], []
+    avenue = []
     for el in gates:
-        t = el.get('tags', {})
         pts = [project((n['lat'], n['lon'])) for n in el.get('geometry') or []]
         if len(pts) < 2:
             continue
         run = [[round(x, 1), round(z, 1)] for x, z in pts
-               if abs(z) <= half * 3 and abs(x) < 900]
-        if t.get('building') and len(pts) >= 4:
-            pass
-        if len(run) < 2:
-            continue
-        if t.get('building'):
-            # Keep only the big one on the rise: Parliament Buildings itself.
-            xs = [q[0] for q in pts]; zs = [q[1] for q in pts]
-            if (max(xs) - min(xs)) * (max(zs) - min(zs)) < 3000:
-                continue
-            parliament.append([[round(x, 1), round(z, 1)] for x, z in pts])
-            continue
-        if t.get('name') == 'Prince of Wales Avenue':
+               if abs(z) <= half * 3 and abs(x) < 1400]
+        if len(run) >= 2:
             avenue.append(run)
-        elif t.get('barrier'):
-            boundary.append(run)
-    print(f'gates: {len(avenue)} avenue runs, {len(boundary)} boundary runs, '
-          f'{len(parliament)} Parliament outlines')
+    print(f'gates: {len(avenue)} avenue runs')
+
+    parliament, parl_meta = parliament_buildings(project)
 
     # A side street is placed at the point where it comes closest to the
     # centreline, which is its junction with the corridor.
@@ -294,6 +419,8 @@ def main():
             if prev is None or abs(x) < abs(prev[0]):
                 streets[name] = (round(x, 1), round(z, 1))
     print(f'{len(streets)} side streets on the section: {", ".join(sorted(streets))}')
+
+    legs = side_street_legs(project, half, streets)
     left = sum(1 for x in kept if x['side'] == -1)
     best = {'a': a, 'b': b, 'mid': centre, 'left': left,
             'right': len(kept) - left, 'kept': kept, 'way': near['w']}
@@ -370,17 +497,30 @@ def main():
         lines.append(f'  {{ id: {json.dumps(cid)}, x: {round(x,1)}, z: {round(z,1)} }},')
     lines += ['];', '']
 
-    lines.append('/** Stormont: the avenue, the estate boundary, Parliament Buildings. */')
-    for var, data in [('AVENUE', avenue), ('ESTATE_BOUNDARY', boundary), ('PARLIAMENT', parliament)]:
+    lines.append('/** Stormont: the avenue and Parliament Buildings. */')
+    for var, data in [('AVENUE', avenue), ('PARLIAMENT', parliament)]:
         lines.append(f'export const {var} = [')
         for run in data:
             lines.append('  [' + ','.join(f'[{x},{z}]' for x, z in run) + '],')
         lines += ['];', '']
+    lines.append('/** Parliament Buildings: OSM building:levels, and DEM rise above the road. */')
+    lines.append(f'export const PARLIAMENT_META = {json.dumps(parl_meta)};')
+    lines.append('')
 
-    lines.append('/** Side streets meeting the corridor, at their junction. */')
+    lines.append('/**')
+    lines.append(' * Side streets meeting the corridor, at their junction.')
+    lines.append(' *')
+    lines.append(' * `centre` is the real centreline, junction end first, running away from')
+    lines.append(' * the corridor. It is shifted in x so the junction sits on the drawn')
+    lines.append(' * centreline: the drawn corridor is straight and the real one curves, so')
+    lines.append(' * without that the mouth misses the road by up to 30 m.')
+    lines.append(' */')
     lines.append('export const STREETS = [')
     for name, (x, z) in sorted(streets.items(), key=lambda kv: kv[1][1]):
-        lines.append(f'  {{ name: {json.dumps(name)}, x: {x}, z: {z}, side: {-1 if x < 0 else 1} }},')
+        run = legs.get(name) or []
+        centre = ','.join(f'[{cx},{cz}]' for cx, cz in run)
+        lines.append(f'  {{ name: {json.dumps(name)}, x: {x}, z: {z}, '
+                     f'side: {-1 if x < 0 else 1}, centre: [{centre}] }},')
     lines += ['];', '']
     path.write_text('\n'.join(lines))
     print(f'wrote {path} ({path.stat().st_size / 1024:.0f} kB)')

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Kerbside — Upper Newtownards Road</title>
+<title>Kerbside · Upper Newtownards Road</title>
 <meta name="description" content="Corridor scenario modelling for NI road schemes. Test a bus lane against real DfI traffic counts." />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230b0e14'/><rect x='6' y='5' width='4' height='22' rx='2' fill='%23d95926'/><rect x='14' y='5' width='4' height='22' rx='2' fill='%233987e5' opacity='.8'/><rect x='22' y='5' width='4' height='22' rx='2' fill='%231baf7a' opacity='.7'/></svg>" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -48,16 +48,11 @@
             <output id="busLaneEndOut">19:00</output>
           </div>
         </div>
-        <label class="switch">
-          <input type="checkbox" id="bikeLaneOn" />
-          <span class="track"><span class="thumb"></span></span>
-          <span class="switch-label">Protected cycle lane <em>takes a second lane</em></span>
-        </label>
         <div class="field">
           <label for="totalLanes">Lanes each way <output id="totalLanesOut">2</output></label>
           <input type="range" id="totalLanes" min="1" max="4" step="1" value="2" />
         </div>
-        <p class="warn" id="laneWarn" hidden>Both reallocations cannot fit in two lanes. One general traffic lane is being retained.</p>
+        <p class="warn" id="laneWarn" hidden>A bus lane does not fit in one lane each way. One general traffic lane is being retained.</p>
       </div>
 
       <div class="group">
@@ -150,9 +145,11 @@
 
       <section class="block block-verdict">
   <div class="verdict card" id="verdict">
-    <div class="verdict-label">Break-even</div>
-    <div class="verdict-figure" id="verdictFigure">—</div>
+    <div class="verdict-label" id="verdictLabel">Versus no reallocation</div>
+    <div class="verdict-figure" id="verdictFigure"></div>
+    <div class="verdict-delta" id="verdictDelta"></div>
     <p class="verdict-body" id="verdictBody">Working it out.</p>
+    <p class="verdict-note" id="verdictNote" hidden></p>
   </div>
 
   <button class="finding-toggle card" id="findingToggle" aria-expanded="false">
