@@ -57,7 +57,12 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.02;
 
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.5, 1600);
-camera.position.set(62, 78, 84);
+
+// The working framing, and the high wide one the page opens from. The entry
+// flies between them so you see where this is before you see any numbers.
+const HOME_VIEW = new THREE.Vector3(62, 78, 84);
+const OPEN_VIEW = new THREE.Vector3(196, 330, 268);
+camera.position.copy(OPEN_VIEW);
 
 const world = buildScene(renderer);
 const sim = new TrafficSim(world.group);
@@ -73,10 +78,65 @@ controls.autoRotate = true;
 controls.autoRotateSpeed = 0.18;
 controls.update();
 
+// ---- Entry ------------------------------------------------------------------
+// Three beats: the frontage rises out of the ground, the camera drops into the
+// corridor, then the street names fade up. Any input cancels it, because a
+// cinematic you cannot interrupt is an obstacle.
+const ENTRY_MS = 2600;
+let entryStart = null;
+let entryDone = false;
+
+world.labelReveal = 0;
+world.frontage.scale.y = 0.001;
+controls.autoRotate = false;
+
+function skipEntry() {
+  if (entryDone) return;
+  entryDone = true;
+  entryStart = null;
+  camera.position.copy(HOME_VIEW);
+  world.frontage.scale.y = 1;
+  world.labelReveal = 1;
+  setSceneTheme(world, document.documentElement.dataset.theme || 'dark');
+  controls.autoRotate = true;
+  controls.update();
+}
+for (const ev of ['pointerdown', 'wheel', 'keydown']) {
+  canvas.addEventListener(ev, skipEntry, { passive: true });
+}
+
+/** Smooth at both ends, and slow enough at the end to feel like a landing. */
+const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+function stepEntry(now) {
+  if (entryDone) return;
+  if (entryStart === null) entryStart = now;
+  const t = Math.min(1, (now - entryStart) / ENTRY_MS);
+
+  // Buildings rise first, over the front half.
+  const rise = Math.min(1, t / 0.55);
+  world.frontage.scale.y = 0.001 + easeInOut(rise) * 0.999;
+
+  // Camera runs the whole way.
+  camera.position.lerpVectors(OPEN_VIEW, HOME_VIEW, easeInOut(t));
+
+  // Names last, once the massing has settled.
+  world.labelReveal = Math.max(0, Math.min(1, (t - 0.6) / 0.4));
+  setSceneTheme(world, world.theme);
+
+  if (t >= 1) {
+    entryDone = true;
+    controls.autoRotate = true;
+    world.frontage.scale.y = 1;
+    world.labelReveal = 1;
+  }
+}
+
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(world.scene, camera));
+const BLOOM_STRENGTH = 0.62;
 const bloom = new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth, window.innerHeight), 0.62, 0.7, 0.82
+  new THREE.Vector2(window.innerWidth, window.innerHeight), BLOOM_STRENGTH, 0.7, 0.82
 );
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
@@ -539,6 +599,7 @@ function animate() {
     s.green.material.color.setHex(green ? 0x0ca30c : 0x0e2a0e);
   }
 
+  stepEntry(performance.now());
   controls.update();
   composer.render();
 
@@ -586,6 +647,8 @@ function applyTheme(mode) {
   btn.setAttribute('aria-label', light ? 'Switch to dark mode' : 'Switch to light mode');
   btn.title = light ? 'Dark mode' : 'Light mode';
   setSceneTheme(world, mode);
+  renderer.toneMappingExposure = light ? 0.78 : 1.02;
+  bloom.strength = light ? 0.06 : BLOOM_STRENGTH;
   applyTimeOfDay(world, state.hour, renderer);
   chart.draw();   // the chart reads its colours from the CSS custom properties
   try {

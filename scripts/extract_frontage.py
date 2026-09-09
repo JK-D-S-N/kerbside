@@ -170,6 +170,16 @@ def main():
     trees = overpass(f'[out:json][timeout:120];(node["natural"="tree"]({bbox}););out;')['elements']
     print(f'{len(green)} green areas, {len(trees)} mapped trees')
 
+    # Every named road that touches the corridor. These are what tell a local
+    # where they are standing, faster than any coordinate.
+    side = overpass(
+        f'[out:json][timeout:180];'
+        f'way["name"="{ROAD_NAME}"]["highway"]({ROAD_BBOX})->.r;'
+        f'node(w.r)->.j;'
+        f'way(bn.j)["highway"]["name"];'
+        f'out geom tags;')['elements']
+    print(f'{len(side)} named ways meeting the corridor')
+
     # Centre the section on the count points and take the bearing from the way
     # that actually passes through them.
     pts = list(COUNT_POINTS.values())
@@ -225,6 +235,22 @@ def main():
             continue
         wood.append([round(x, 1), round(z, 1)])
     print(f'{len(greens)} green areas and {len(wood)} trees inside the section')
+
+    # A side street is placed at the point where it comes closest to the
+    # centreline, which is its junction with the corridor.
+    streets = {}
+    for el in side:
+        name = el.get('tags', {}).get('name')
+        if not name or name == ROAD_NAME:
+            continue
+        for n in el.get('geometry') or []:
+            x, z = project((n['lat'], n['lon']))
+            if abs(z) > half - 12 or abs(x) > 26:
+                continue
+            prev = streets.get(name)
+            if prev is None or abs(x) < abs(prev[0]):
+                streets[name] = (round(x, 1), round(z, 1))
+    print(f'{len(streets)} side streets on the section: {", ".join(sorted(streets))}')
     left = sum(1 for x in kept if x['side'] == -1)
     best = {'a': a, 'b': b, 'mid': centre, 'left': left,
             'right': len(kept) - left, 'kept': kept, 'way': near['w']}
@@ -268,6 +294,11 @@ def main():
     lines.append('/** Individually mapped trees, as [x, z]. */')
     lines.append(f'export const TREES = {json.dumps(wood)};')
     lines.append('')
+    lines.append('/** Side streets meeting the corridor, at their junction. */')
+    lines.append('export const STREETS = [')
+    for name, (x, z) in sorted(streets.items(), key=lambda kv: kv[1][1]):
+        lines.append(f'  {{ name: {json.dumps(name)}, x: {x}, z: {z}, side: {-1 if x < 0 else 1} }},')
+    lines += ['];', '']
     path.write_text('\n'.join(lines))
     print(f'wrote {path} ({path.stat().st_size / 1024:.0f} kB)')
 

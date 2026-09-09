@@ -10,7 +10,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { FRONTAGE } from './frontage.js';
+import { FRONTAGE, STREETS, TREES } from './frontage.js';
 
 export const LANE_W = 3.2;
 export const ROAD_LEN = 400;
@@ -47,16 +47,16 @@ export const HALT_Z = { inbound: -HALF + 150, outbound: HALF - 150 };
  * furniture keeps one set, because a lamp column is dark in both worlds.
  */
 const PALETTE = {
-  ground:   { dark: 0x141821, light: 0xb2bac6 },
-  road:     { dark: 0x2a2f3a, light: 0x6f7885 },
-  footway:  { dark: 0x3a4150, light: 0x9aa2ae },
-  kerb:     { dark: 0x525b6c, light: 0xc4cad3 },
+  ground:   { dark: 0x141821, light: 0xe3e7ec },
+  road:     { dark: 0x2a2f3a, light: 0xc8ccd3 },
+  footway:  { dark: 0x3a4150, light: 0xdfe3e9 },
+  kerb:     { dark: 0x525b6c, light: 0xeef1f5 },
   marking:  { dark: 0x8b93a7, light: 0xfbfcfe },
-  b0:       { dark: 0x39414f, light: 0xa4adba },
-  b1:       { dark: 0x454d5d, light: 0xb4bcc8 },
-  b2:       { dark: 0x2f3744, light: 0x98a1af },
-  b3:       { dark: 0x515a6c, light: 0xbec5d0 },
-  b4:       { dark: 0x3d4553, light: 0xabb3bf },
+  b0:       { dark: 0x39414f, light: 0xf3f5f8 },
+  b1:       { dark: 0x454d5d, light: 0xfbfcfd },
+  b2:       { dark: 0x2f3744, light: 0xeaedf2 },
+  b3:       { dark: 0x515a6c, light: 0xffffff },
+  b4:       { dark: 0x3d4553, light: 0xf0f2f6 },
 };
 
 export function buildScene(renderer) {
@@ -204,12 +204,27 @@ export function buildScene(renderer) {
     }
   }
 
+  // Outlines. Hidden in dark mode, where solid massing reads better; the whole
+  // point of the light mode is the line-work, so they carry it there.
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x1d2430, transparent: true, opacity: 0 });
+  const outlines = [];
+  // Everything that grows out of the ground on load lives in one group, so the
+  // entry animation is a single scale rather than 900 tweens.
+  const frontage = new THREE.Group();
+  group.add(frontage);
+
   buckets.forEach((geos, i) => {
     if (!geos.length) return;
-    const mesh = new THREE.Mesh(mergeGeometries(geos), buildingMats[i]);
+    const merged = mergeGeometries(geos);
+    const mesh = new THREE.Mesh(merged, buildingMats[i]);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    group.add(mesh);
+    frontage.add(mesh);
+
+    const line = new THREE.LineSegments(new THREE.EdgesGeometry(merged, 22), edgeMat);
+    frontage.add(line);
+    outlines.push(line);
+
     geos.forEach((g) => g.dispose());
   });
 
@@ -223,9 +238,50 @@ export function buildScene(renderer) {
       new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0, side: THREE.DoubleSide })
     );
     mesh.userData.lit = lit;
-    group.add(mesh);
+    frontage.add(mesh);
     windows.push(mesh);
     quads.forEach((q) => q.dispose());
+  }
+
+  // ---- Street names -------------------------------------------------------
+  // Laid flat on the ground at the junction, the way a map prints them. A
+  // local reads one of these faster than any coordinate.
+  const streetLabels = [];
+  for (const st of STREETS) {
+    const pad = 24;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const font = '600 46px -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif';
+    const text = st.name.toUpperCase();
+    const spacing = 3;
+    ctx.font = font;
+    ctx.letterSpacing = `${spacing}px`;
+    // Measure with the tracking applied, or the last glyph runs off the canvas.
+    const w = Math.ceil(ctx.measureText(text).width) + spacing * text.length + pad * 2;
+    canvas.width = w;
+    canvas.height = 96;
+
+    const c2 = canvas.getContext('2d');
+    c2.font = font;
+    c2.letterSpacing = `${spacing}px`;
+    c2.textBaseline = 'middle';
+    c2.fillStyle = '#0f1620';
+    c2.fillText(text, pad, 52);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const scale = 0.062;
+    const label = new THREE.Mesh(
+      new THREE.PlaneGeometry(canvas.width * scale, canvas.height * scale),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false })
+    );
+    label.rotation.x = -Math.PI / 2;
+    // Sit it just off the carriageway on the side the street joins, reading
+    // along the road so it never fights the corridor.
+    label.position.set(st.side * (FOOTWAY_X + 6.5), 0.06, st.z);
+    label.rotation.z = Math.PI / 2;
+    group.add(label);
+    streetLabels.push(label);
   }
 
   // ---- Street lighting ----------------------------------------------------
@@ -343,7 +399,7 @@ export function buildScene(renderer) {
   return {
     scene, group, sun, hemi, ambient,
     busLanes, cycleLanes, windows, lampHeads, signals, halts,
-    themed, theme: 'dark',
+    themed, theme: 'dark', outlines, edgeMat, streetLabels, frontage,
   };
 }
 
@@ -378,6 +434,15 @@ const KEYS = [
 export function setSceneTheme(world, mode) {
   world.theme = mode === 'light' ? 'light' : 'dark';
   for (const { role, mat } of world.themed) mat.color.setHex(PALETTE[role][world.theme]);
+
+  // Light mode is the line-work drawing: pale flat massing, dark outlines,
+  // street names on the deck. Dark mode is solid massing and no outlines.
+  const light = world.theme === 'light';
+  world.edgeMat.opacity = light ? 0.9 : 0;
+  for (const l of world.outlines) l.visible = light;
+  for (const l of world.streetLabels) {
+    l.material.opacity = (light ? 0.85 : 0.32) * (world.labelReveal ?? 1);
+  }
 }
 
 export function applyTimeOfDay(world, hourFloat, renderer) {
