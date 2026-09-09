@@ -6,7 +6,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
-import { buildScene, applyTimeOfDay } from './scene.js';
+import { buildScene, applyTimeOfDay, setSceneTheme } from './scene.js';
 import { TrafficSim } from './vehicles.js';
 import { COUNTS } from './counts.js';
 import {
@@ -575,6 +575,38 @@ animate();
 
 requestAnimationFrame(() => {
   setTimeout(() => {
+// ---- Theme ----------------------------------------------------------------
+// Dark by default. Light exists for projectors, and it moves the 3D palette as
+// well as the chrome, so the corridor does not stay a black hole on a screen
+// full of white.
+function applyTheme(mode) {
+  const light = mode === 'light';
+  document.documentElement.dataset.theme = light ? 'light' : 'dark';
+  const btn = $('themeToggle');
+  btn.setAttribute('aria-label', light ? 'Switch to dark mode' : 'Switch to light mode');
+  btn.title = light ? 'Dark mode' : 'Light mode';
+  setSceneTheme(world, mode);
+  applyTimeOfDay(world, state.hour, renderer);
+  chart.draw();   // the chart reads its colours from the CSS custom properties
+  try {
+    localStorage.setItem('kerbside.theme', mode);
+  } catch {
+    // Private browsing. The toggle still works for this session.
+  }
+}
+
+let storedTheme = null;
+try {
+  storedTheme = localStorage.getItem('kerbside.theme');
+} catch {
+  storedTheme = null;
+}
+applyTheme(storedTheme === 'light' ? 'light' : 'dark');
+
+$('themeToggle').addEventListener('click', () => {
+  applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+});
+
     $('loading').classList.add('gone');
     setTimeout(() => ($('loading').style.display = 'none'), 600);
   }, 350);

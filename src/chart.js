@@ -16,6 +16,12 @@ const el = (tag, attrs = {}) => {
 
 const PAD = { top: 18, right: 58, bottom: 26, left: 42 };
 
+/** Current value of a CSS custom property, so the chart follows the theme. */
+function token(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
 export class DelayChart {
   constructor(root, tooltip) {
     this.root = root;
@@ -87,7 +93,7 @@ export class DelayChart {
       const y = Y(v);
       this.svg.appendChild(el('line', {
         x1: PAD.left, x2: PAD.left + plotW, y1: y, y2: y,
-        stroke: 'rgba(255,255,255,0.07)', 'stroke-width': 1,
+        stroke: token('--chart-grid', 'rgba(255,255,255,0.07)'), 'stroke-width': 1,
       }));
       const t = el('text', {
         x: PAD.left - 8, y: y + 3.5, 'text-anchor': 'end', class: 'chart-axis',
@@ -109,11 +115,11 @@ export class DelayChart {
       vals.map((v, i) => `${i === 0 ? 'M' : 'L'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
 
     this.svg.appendChild(el('path', {
-      d: path(comparison), fill: 'none', stroke: '#3987e5',
+      d: path(comparison), fill: 'none', stroke: token('--baseline', '#3987e5'),
       'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
     }));
     this.svg.appendChild(el('path', {
-      d: path(scenario), fill: 'none', stroke: '#d95926',
+      d: path(scenario), fill: 'none', stroke: token('--scheme', '#d95926'),
       'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
     }));
 
@@ -125,12 +131,12 @@ export class DelayChart {
       x: PAD.left + plotW + 6, y: Y(lastS) + (apart && lastS < lastC ? -4 : 3.5), class: 'chart-label',
     });
     labS.textContent = 'Scenario';
-    labS.setAttribute('fill', '#d95926');
+    labS.setAttribute('fill', token('--scheme', '#d95926'));
     const labC = el('text', {
       x: PAD.left + plotW + 6, y: Y(lastC) + (apart && lastC <= lastS ? 10 : 3.5), class: 'chart-label',
     });
     labC.textContent = 'Baseline';
-    labC.setAttribute('fill', '#3987e5');
+    labC.setAttribute('fill', token('--baseline', '#3987e5'));
     this.svg.appendChild(labS);
     this.svg.appendChild(labC);
 
@@ -138,7 +144,7 @@ export class DelayChart {
     if (currentHour != null) {
       this.svg.appendChild(el('line', {
         x1: X(currentHour), x2: X(currentHour), y1: PAD.top, y2: PAD.top + plotH,
-        stroke: 'rgba(255,255,255,0.30)', 'stroke-width': 1, 'stroke-dasharray': '3 3',
+        stroke: token('--chart-crosshair', 'rgba(255,255,255,0.30)'), 'stroke-width': 1, 'stroke-dasharray': '3 3',
       }));
     }
 
@@ -147,12 +153,12 @@ export class DelayChart {
       const hr = this.hoverHour;
       this.svg.appendChild(el('line', {
         x1: X(hr), x2: X(hr), y1: PAD.top, y2: PAD.top + plotH,
-        stroke: 'rgba(255,255,255,0.5)', 'stroke-width': 1,
+        stroke: token('--chart-rule', 'rgba(255,255,255,0.5)'), 'stroke-width': 1,
       }));
-      for (const [vals, colour] of [[comparison, '#3987e5'], [scenario, '#d95926']]) {
+      for (const [vals, colour] of [[comparison, token('--baseline', '#3987e5')], [scenario, token('--scheme', '#d95926')]]) {
         this.svg.appendChild(el('circle', {
           cx: X(hr), cy: Y(vals[hr]), r: 4.5, fill: colour,
-          stroke: '#16181d', 'stroke-width': 2,
+          stroke: token('--chart-halo', '#16181d'), 'stroke-width': 2,
         }));
       }
     }
@@ -183,8 +189,8 @@ export class DelayChart {
     const sign = diff >= 0 ? '+' : '';
     this.tooltip.innerHTML = `
       <div class="tt-hour">${String(hr).padStart(2, '0')}:00${laneActive[hr] ? ' <span class="tt-flag">bus lane on</span>' : ''}</div>
-      <div class="tt-row"><span class="tt-dot" style="background:#d95926"></span>Scenario<b>${scenario[hr].toFixed(1)}</b></div>
-      <div class="tt-row"><span class="tt-dot" style="background:#3987e5"></span>Baseline<b>${comparison[hr].toFixed(1)}</b></div>
+      <div class="tt-row"><span class="tt-dot" style="background:var(--scheme)"></span>Scenario<b>${scenario[hr].toFixed(1)}</b></div>
+      <div class="tt-row"><span class="tt-dot" style="background:var(--baseline)"></span>Baseline<b>${comparison[hr].toFixed(1)}</b></div>
       <div class="tt-diff ${diff > 0 ? 'worse' : diff < 0 ? 'better' : ''}">${sign}${diff.toFixed(1)} person-hours</div>`;
     this.tooltip.hidden = false;
     const host = this.root.getBoundingClientRect();

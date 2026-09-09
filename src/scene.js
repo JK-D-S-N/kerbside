@@ -3,11 +3,14 @@
  * built to the real cross-section: two lanes each way, kerbside bus lane,
  * footways, and the terraced/commercial frontage the road actually has.
  *
- * Geometry is hand-built, not surveyed. A published map tile or OSM extract
- * cannot be fetched from this page, and eyeballed geometry is honest about
- * what it is.
+ * The carriageway is hand-built to the real cross-section. The frontage is not:
+ * it is the actual OSM building footprints for this section, extruded to
+ * surveyed heights where OSM has them and to storey counts where it does not.
+ * See scripts/extract_frontage.py.
  */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { FRONTAGE } from './frontage.js';
 
 export const LANE_W = 3.2;
 export const ROAD_LEN = 400;
@@ -39,8 +42,33 @@ export const SIGNAL_Z = { inbound: -HALF + 70, outbound: HALF - 70 };
 /** Glider halts, as world z, one each way. */
 export const HALT_Z = { inbound: -HALF + 150, outbound: HALF - 150 };
 
+/**
+ * Surface colours per theme. Only the large surfaces are themed; street
+ * furniture keeps one set, because a lamp column is dark in both worlds.
+ */
+const PALETTE = {
+  ground:   { dark: 0x141821, light: 0xb2bac6 },
+  road:     { dark: 0x2a2f3a, light: 0x6f7885 },
+  footway:  { dark: 0x3a4150, light: 0x9aa2ae },
+  kerb:     { dark: 0x525b6c, light: 0xc4cad3 },
+  marking:  { dark: 0x8b93a7, light: 0xfbfcfe },
+  b0:       { dark: 0x39414f, light: 0xa4adba },
+  b1:       { dark: 0x454d5d, light: 0xb4bcc8 },
+  b2:       { dark: 0x2f3744, light: 0x98a1af },
+  b3:       { dark: 0x515a6c, light: 0xbec5d0 },
+  b4:       { dark: 0x3d4553, light: 0xabb3bf },
+};
+
 export function buildScene(renderer) {
   const scene = new THREE.Scene();
+
+  // Materials that follow the theme, tagged as they are made.
+  const themed = [];
+  const skin = (role, mat) => {
+    mat.color.setHex(PALETTE[role].dark);
+    themed.push({ role, mat });
+    return mat;
+  };
 
   const group = new THREE.Group();
   scene.add(group);
@@ -48,7 +76,7 @@ export function buildScene(renderer) {
   // ---- Ground -------------------------------------------------------------
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(1400, 1400),
-    new THREE.MeshStandardMaterial({ color: 0x141821, roughness: 1, metalness: 0 })
+    skin('ground', new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 }))
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.06;
@@ -58,14 +86,14 @@ export function buildScene(renderer) {
   // ---- Carriageway --------------------------------------------------------
   const road = new THREE.Mesh(
     new THREE.PlaneGeometry(KERB_X * 2, ROAD_LEN),
-    new THREE.MeshStandardMaterial({ color: 0x2a2f3a, roughness: 0.9, metalness: 0.02 })
+    skin('road', new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0.02 }))
   );
   road.rotation.x = -Math.PI / 2;
   road.receiveShadow = true;
   group.add(road);
 
   // ---- Footways -----------------------------------------------------------
-  const footMat = new THREE.MeshStandardMaterial({ color: 0x3a4150, roughness: 0.95 });
+  const footMat = skin('footway', new THREE.MeshStandardMaterial({ roughness: 0.95 }));
   for (const side of [-1, 1]) {
     const w = FOOTWAY_X - KERB_X;
     const foot = new THREE.Mesh(new THREE.BoxGeometry(w, 0.14, ROAD_LEN), footMat);
@@ -75,7 +103,7 @@ export function buildScene(renderer) {
   }
 
   // ---- Lane markings ------------------------------------------------------
-  const markMat = new THREE.MeshBasicMaterial({ color: 0x8b93a7, transparent: true, opacity: 0.5 });
+  const markMat = skin('marking', new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.5 }));
   // Centre line, solid.
   const centre = new THREE.Mesh(new THREE.PlaneGeometry(0.3, ROAD_LEN), markMat);
   centre.rotation.x = -Math.PI / 2;
@@ -119,7 +147,7 @@ export function buildScene(renderer) {
   }
 
   // ---- Kerbs --------------------------------------------------------------
-  const kerbMat = new THREE.MeshStandardMaterial({ color: 0x525b6c, roughness: 0.9 });
+  const kerbMat = skin('kerb', new THREE.MeshStandardMaterial({ roughness: 0.9 }));
   for (const side of [-1, 1]) {
     const k = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.16, ROAD_LEN), kerbMat);
     k.position.set(side * KERB_X, 0.08, 0);
@@ -127,46 +155,77 @@ export function buildScene(renderer) {
   }
 
   // ---- Frontage -----------------------------------------------------------
+  // Real footprints from OSM. Everything is merged down to one mesh per
+  // material so 359 buildings cost five draw calls rather than 359.
   const rand = mulberry32(20260910);
-  const buildingMats = [0x39414f, 0x454d5d, 0x2f3744, 0x515a6c, 0x3d4553].map(
-    (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, metalness: 0.05 })
+  const buildingMats = ['b0', 'b1', 'b2', 'b3', 'b4'].map(
+    (role) => skin(role, new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0.05 }))
   );
-  const windowMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0 });
-  const windows = [];
+  const buckets = buildingMats.map(() => []);
+  const litQuads = [];
+  const darkQuads = [];
 
-  for (const side of [-1, 1]) {
-    let z = -HALF;
-    while (z < HALF) {
-      const depth = 10 + rand() * 16;
-      const width = 7 + rand() * 12;
-      const height = 5.5 + rand() * 5;
-      const gap = rand() < 0.14 ? 6 + rand() * 10 : 0.6; // side streets and entries
+  for (const b of FRONTAGE) {
+    // ExtrudeGeometry works in the XY plane and extrudes along +Z, so feed it
+    // (x, -z) and lay it down: the footprint lands back on the ground plane
+    // with the extrusion running up in y.
+    const shape = new THREE.Shape(b.ring.map(([x, z]) => new THREE.Vector2(x, -z)));
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: b.height, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2);
+    geo.computeVertexNormals();
+    buckets[b.id % buckets.length].push(geo);
 
-      const b = new THREE.Mesh(
-        new THREE.BoxGeometry(depth, height, width),
-        buildingMats[(rand() * buildingMats.length) | 0]
-      );
-      b.position.set(side * (FOOTWAY_X + depth / 2), height / 2, z + width / 2);
-      b.castShadow = true;
-      b.receiveShadow = true;
-      group.add(b);
-
-      // A strip of windows facing the road, lit after dark.
-      const rows = Math.max(1, Math.floor(height / 3));
-      for (let r = 0; r < rows; r++) {
-        const w = new THREE.Mesh(new THREE.PlaneGeometry(width * 0.72, 1.1), windowMat.clone());
-        w.position.set(
-          side * (FOOTWAY_X + 0.02),
-          1.9 + r * 3,
-          z + width / 2
-        );
-        w.rotation.y = side * Math.PI / 2 * -1;
-        w.userData.lit = rand() < 0.62;
-        group.add(w);
-        windows.push(w);
+    // Windows go on the wall nearest the carriageway, which is the frontage
+    // anyone in the scene can actually see.
+    let edge = null;
+    for (let i = 0; i < b.ring.length; i++) {
+      const p = b.ring[i];
+      const q = b.ring[(i + 1) % b.ring.length];
+      const mx = (p[0] + q[0]) / 2;
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (len < 3) continue;
+      if (!edge || Math.abs(mx) < Math.abs(edge.mx)) {
+        edge = { p, q, mx, mz: (p[1] + q[1]) / 2, len };
       }
-      z += width + gap;
     }
+    if (!edge) continue;
+
+    const rows = Math.max(1, Math.min(4, Math.floor(b.height / 3)));
+    const angle = Math.atan2(edge.q[0] - edge.p[0], edge.q[1] - edge.p[1]);
+    for (let r = 0; r < rows; r++) {
+      const quad = new THREE.PlaneGeometry(edge.len * 0.7, 1.1);
+      quad.rotateY(angle + Math.PI / 2);
+      quad.translate(
+        edge.mx - Math.sign(edge.mx) * 0.06,
+        1.9 + r * 3,
+        edge.mz
+      );
+      (rand() < 0.62 ? litQuads : darkQuads).push(quad);
+    }
+  }
+
+  buckets.forEach((geos, i) => {
+    if (!geos.length) return;
+    const mesh = new THREE.Mesh(mergeGeometries(geos), buildingMats[i]);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    geos.forEach((g) => g.dispose());
+  });
+
+  // Two merged window meshes rather than 900 loose ones. applyTimeOfDay still
+  // sees an array of things with a `lit` flag and an opacity to drive.
+  const windows = [];
+  for (const [quads, lit] of [[litQuads, true], [darkQuads, false]]) {
+    if (!quads.length) continue;
+    const mesh = new THREE.Mesh(
+      mergeGeometries(quads),
+      new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0, side: THREE.DoubleSide })
+    );
+    mesh.userData.lit = lit;
+    group.add(mesh);
+    windows.push(mesh);
+    quads.forEach((q) => q.dispose());
   }
 
   // ---- Street lighting ----------------------------------------------------
@@ -284,6 +343,7 @@ export function buildScene(renderer) {
   return {
     scene, group, sun, hemi, ambient,
     busLanes, cycleLanes, windows, lampHeads, signals, halts,
+    themed, theme: 'dark',
   };
 }
 
@@ -299,16 +359,26 @@ function mixHex(a, b, t) {
  * elevation and azimuth, and how lit the artificial lighting is.
  */
 const KEYS = [
-  { h: 0, sky: 0x090d16, sunCol: 0x4a5a80, sunI: 0.08, elev: -8, azi: 200, lamp: 1.0 },
-  { h: 5, sky: 0x18213a, sunCol: 0x8a7fa8, sunI: 0.25, elev: -1, azi: 68, lamp: 1.0 },
-  { h: 7, sky: 0x4a5570, sunCol: 0xffb083, sunI: 1.5, elev: 12, azi: 84, lamp: 0.35 },
-  { h: 9, sky: 0x7d95b8, sunCol: 0xffe0bd, sunI: 2.5, elev: 32, azi: 112, lamp: 0 },
-  { h: 13, sky: 0x93aecb, sunCol: 0xfff6ea, sunI: 3.0, elev: 52, azi: 180, lamp: 0 },
-  { h: 17, sky: 0x87a0c0, sunCol: 0xffe6c4, sunI: 2.2, elev: 27, azi: 248, lamp: 0 },
-  { h: 19, sky: 0x5a5f7d, sunCol: 0xff9a5e, sunI: 0.9, elev: 7, azi: 276, lamp: 0.5 },
-  { h: 21, sky: 0x1b2338, sunCol: 0x5a6690, sunI: 0.22, elev: -5, azi: 292, lamp: 1.0 },
-  { h: 24, sky: 0x090d16, sunCol: 0x4a5a80, sunI: 0.08, elev: -8, azi: 200, lamp: 1.0 },
+  { h: 0, sky: 0x121a2b, sunCol: 0x4a5a80, sunI: 0.08, elev: -8, azi: 200, lamp: 1.0 },
+  { h: 5, sky: 0x2b3a63, sunCol: 0x8a7fa8, sunI: 0.25, elev: -1, azi: 68, lamp: 1.0 },
+  { h: 7, sky: 0x8a9bc4, sunCol: 0xffb083, sunI: 1.5, elev: 12, azi: 84, lamp: 0.35 },
+  { h: 9, sky: 0xbcd0ee, sunCol: 0xffe0bd, sunI: 2.5, elev: 32, azi: 112, lamp: 0 },
+  { h: 13, sky: 0xd2e2f6, sunCol: 0xfff6ea, sunI: 3.0, elev: 52, azi: 180, lamp: 0 },
+  { h: 17, sky: 0xc6d8f0, sunCol: 0xffe6c4, sunI: 2.2, elev: 27, azi: 248, lamp: 0 },
+  { h: 19, sky: 0x9a8fb0, sunCol: 0xff9a5e, sunI: 0.9, elev: 7, azi: 276, lamp: 0.5 },
+  { h: 21, sky: 0x323f61, sunCol: 0x5a6690, sunI: 0.22, elev: -5, azi: 292, lamp: 1.0 },
+  { h: 24, sky: 0x121a2b, sunCol: 0x4a5a80, sunI: 0.08, elev: -8, azi: 200, lamp: 1.0 },
 ];
+
+/**
+ * Swap the large surfaces between themes. The sky still comes from the hour,
+ * but in light mode it is floored so a night scene stays readable on a
+ * projector instead of going to black.
+ */
+export function setSceneTheme(world, mode) {
+  world.theme = mode === 'light' ? 'light' : 'dark';
+  for (const { role, mat } of world.themed) mat.color.setHex(PALETTE[role][world.theme]);
+}
 
 export function applyTimeOfDay(world, hourFloat, renderer) {
   const h = ((hourFloat % 24) + 24) % 24;
@@ -318,7 +388,15 @@ export function applyTimeOfDay(world, hourFloat, renderer) {
   const b = KEYS[i + 1];
   const t = (h - a.h) / (b.h - a.h);
 
-  const sky = mixHex(a.sky, b.sky, t);
+  let sky = mixHex(a.sky, b.sky, t);
+  let fogCol = sky;
+  if (world.theme === 'light') {
+    // Lift the night end towards paper without flattening midday. The fog is
+    // held back from the sky colour and pushed out, or a pale sky bleaches the
+    // corridor away to nothing.
+    sky = sky.clone().lerp(new THREE.Color(0xe8eef7), 0.55);
+    fogCol = sky.clone().lerp(new THREE.Color(0x9aa6b8), 0.45);
+  }
   const sunCol = mixHex(a.sunCol, b.sunCol, t);
   const sunI = a.sunI + (b.sunI - a.sunI) * t;
   const elev = a.elev + (b.elev - a.elev) * t;
@@ -326,7 +404,9 @@ export function applyTimeOfDay(world, hourFloat, renderer) {
   const lamp = a.lamp + (b.lamp - a.lamp) * t;
 
   world.scene.background = sky;
-  world.scene.fog.color = sky;
+  world.scene.fog.color = fogCol;
+  world.scene.fog.near = world.theme === 'light' ? 320 : 150;
+  world.scene.fog.far = world.theme === 'light' ? 1250 : 720;
   renderer.setClearColor(sky, 1);
 
   world.sun.color = sunCol;
@@ -339,8 +419,9 @@ export function applyTimeOfDay(world, hourFloat, renderer) {
     Math.max(4, R * Math.sin(er)),
     R * Math.cos(er) * Math.cos(ar)
   );
-  world.hemi.intensity = 0.32 + sunI * 0.34;
-  world.ambient.intensity = 0.22 + sunI * 0.14;
+  const lift = world.theme === 'light' ? 1.35 : 1;
+  world.hemi.intensity = (0.32 + sunI * 0.34) * lift;
+  world.ambient.intensity = (0.22 + sunI * 0.14) * lift;
 
   for (const w of world.windows) {
     w.material.opacity = w.userData.lit ? lamp * 0.85 : lamp * 0.06;

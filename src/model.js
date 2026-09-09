@@ -178,14 +178,39 @@ export function carEmissionsPerKm(speedKph, a) {
  * @param {object} a            assumptions
  * @param {boolean} busLaneActive whether the bus lane operates this hour
  */
-export function evaluateHour(observedVeh, cfg, a, busLaneActive) {
+/**
+ * How full a bus is, hour by hour, as a share of its busiest hour.
+ *
+ * Buses are not equally loaded all day: the corridor's own traffic counts show
+ * a sharp commuter double-peak, and bus ridership on a radial route follows it
+ * more steeply than car traffic does, because the off-peak trips people still
+ * make are the ones they make by car. Modelling one flat load all day flatters
+ * an all-day bus lane and penalises a peak-only one, which is precisely the
+ * comparison this tool exists to make.
+ *
+ * The shape is derived from the corridor's own hourly count profile, sharpened
+ * at the peaks. It is a shape, not a survey: see WHAT THIS DOES NOT MODEL.
+ */
+export const BUS_LOAD_PROFILE = [
+  0.05, 0.03, 0.02, 0.02, 0.06, 0.22, 0.55, 0.92, 1.00, 0.66,
+  0.40, 0.35, 0.38, 0.40, 0.42, 0.58, 0.86, 0.95, 0.70, 0.44,
+  0.30, 0.22, 0.14, 0.08,
+];
+
+/**
+ * @param {number} hour  clock hour, so bus loading can follow the day
+ */
+export function evaluateHour(observedVeh, cfg, a, busLaneActive, hour = null) {
   const { lanes, clamped } = generalTrafficLanes(cfg.totalLanes, busLaneActive, cfg.bikeLaneOn);
   const capacity = lanes * a.saturationFlow * a.greenFraction;
 
   // Bus service. Ridership is assumed to fall when the lane is taken away.
   const busesPerHour = cfg.busServiceOn ? cfg.busesPerHour : 0;
   const loadFactor = busLaneActive ? 1 : 1 - a.ridershipLossWithoutLane;
-  const busPassengersPerBus = Math.min(a.busCapacity, cfg.busLoad * loadFactor);
+  // cfg.busLoad is the load at the busiest hour. Every other hour is a share
+  // of it. A caller with no hour (a single-hour probe) gets the peak.
+  const shape = hour === null ? 1 : BUS_LOAD_PROFILE[((hour % 24) + 24) % 24];
+  const busPassengersPerBus = Math.min(a.busCapacity, cfg.busLoad * shape * loadFactor);
   const busPassengers = busesPerHour * busPassengersPerBus;
 
   // Trips abstracted from cars by the bus service.
@@ -258,8 +283,8 @@ export function runDay(counts, cfg, a) {
 
   for (let h = 0; h < 24; h++) {
     const active = busLaneOperating(h, cfg);
-    const inbound = evaluateHour(counts.inbound[h], cfg, a, active);
-    const outbound = evaluateHour(counts.outbound[h], cfg, a, active);
+    const inbound = evaluateHour(counts.inbound[h], cfg, a, active, h);
+    const outbound = evaluateHour(counts.outbound[h], cfg, a, active, h);
 
     const combined = {
       hour: h,

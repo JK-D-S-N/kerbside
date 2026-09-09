@@ -143,25 +143,65 @@ test('an empty bus lane is worse for everyone than no bus lane', () => {
     'an empty bus lane should cost person-hours, not save them');
 });
 
-test('a full, frequent bus lane beats no bus lane on person-delay', () => {
+test('a full, frequent PEAK-ONLY bus lane beats no bus lane on person-delay', () => {
+  // Once loading follows the day, an all-day lane on this corridor cannot pay
+  // for itself: it holds a lane open through hours when the buses are nearly
+  // empty. A peak-only lane keeps the benefit and drops the cost.
   const full = { ...baseCfg, busesPerHour: 12, busLoad: 95 };
-  const scheme = runDay(counts, full, A);
   const none = runDay(counts, { ...full, busLaneOn: false }, A);
-  assert.ok(scheme.totals.personHoursDelay < none.totals.personHoursDelay,
-    `scheme ${scheme.totals.personHoursDelay} should beat ${none.totals.personHoursDelay}`);
+
+  const peakOnly = runDay(counts, { ...full, busLanePeakOnly: true }, A);
+  assert.ok(peakOnly.totals.personHoursDelay < none.totals.personHoursDelay,
+    `peak-only ${peakOnly.totals.personHoursDelay} should beat ${none.totals.personHoursDelay}`);
+
+  const allDay = runDay(counts, full, A);
+  assert.ok(allDay.totals.personHoursDelay > none.totals.personHoursDelay,
+    'at a realistic peak load the all-day lane should lose, and be seen to lose');
 });
 
 test('break-even returns a load between empty and full, and it is the crossing point', () => {
+  // Solved against the peak-only scheme, because the all-day break-even sits
+  // within a passenger or two of the vehicle capacity, where the clamp on
+  // busPassengersPerBus flattens the curve and there is no crossing to find.
+  const scheme = { ...baseCfg, busLanePeakOnly: true };
   const comparison = { ...baseCfg, busLaneOn: false };
-  const r = solveBreakEven(counts, baseCfg, comparison, A);
-  assert.ok(!r.impossible, 'a full bus should be able to pay for the lane');
+  const r = solveBreakEven(counts, scheme, comparison, A);
+  assert.ok(!r.impossible, 'a full bus should be able to pay for a peak-only lane');
   assert.ok(r.load > 0 && r.load < A.busCapacity, `break-even load ${r.load}`);
 
   const net = (load) =>
-    runDay(counts, { ...baseCfg, busLoad: load }, A).totals.personHoursDelay -
+    runDay(counts, { ...scheme, busLoad: load }, A).totals.personHoursDelay -
     runDay(counts, { ...comparison, busLoad: load }, A).totals.personHoursDelay;
   assert.ok(net(r.load - 3) > 0, 'just below break-even the scheme should still lose');
   assert.ok(net(r.load + 3) < 0, 'just above break-even the scheme should win');
+});
+
+test('bus loading follows the day, and the peak is the number the user sets', () => {
+  const cfg = { ...baseCfg, busesPerHour: 12, busLoad: 100 };
+  const day = runDay(counts, cfg, A);
+
+  const perBus = day.hours.map(
+    (h) => h.inbound.busPassengers / Math.max(1, h.inbound.busesPerHour)
+  );
+  const busiest = Math.max(...perBus);
+  const quietest = Math.min(...perBus);
+
+  assert.ok(busiest <= 100.001, `no hour should exceed the set peak, got ${busiest}`);
+  assert.ok(busiest > 90, `the peak hour should be close to the set peak, got ${busiest}`);
+  assert.ok(quietest < 10, `the small hours should be nearly empty, got ${quietest}`);
+});
+
+test('a peak-only lane breaks even at a lower load than an all-day lane', () => {
+  const comparison = { ...baseCfg, busLaneOn: false };
+  const allDay = solveBreakEven(counts, { ...baseCfg, busesPerHour: 12 }, comparison, A);
+  const peak = solveBreakEven(
+    counts, { ...baseCfg, busesPerHour: 12, busLanePeakOnly: true }, comparison, A
+  );
+  // On this corridor an all-day lane is often unpayable at any loading, which
+  // is a stronger version of the same claim rather than a different one.
+  assert.ok(peak.load !== null, 'a peak-only lane should have a reachable break-even');
+  assert.ok(allDay.impossible || peak.load < allDay.load,
+    `peak-only ${peak.load} should break even below all-day ${allDay.load}`);
 });
 
 test('break-even never exceeds the vehicle capacity of the bus', () => {
