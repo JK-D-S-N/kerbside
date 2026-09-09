@@ -1,0 +1,1170 @@
+{
+ "918": {
+  "All directions": {
+   "0": {
+    "workday": 113,
+    "sevenday": 154,
+    "mon": 115,
+    "fri": 140,
+    "sat": 234,
+    "sun": 280
+   },
+   "1": {
+    "workday": 69,
+    "sevenday": 100,
+    "mon": 68,
+    "fri": 88,
+    "sat": 148,
+    "sun": 208
+   },
+   "2": {
+    "workday": 56,
+    "sevenday": 77,
+    "mon": 47,
+    "fri": 84,
+    "sat": 99,
+    "sun": 155
+   },
+   "3": {
+    "workday": 39,
+    "sevenday": 51,
+    "mon": 36,
+    "fri": 43,
+    "sat": 66,
+    "sun": 98
+   },
+   "4": {
+    "workday": 45,
+    "sevenday": 47,
+    "mon": 44,
+    "fri": 52,
+    "sat": 47,
+    "sun": 56
+   },
+   "5": {
+    "workday": 103,
+    "sevenday": 91,
+    "mon": 104,
+    "fri": 110,
+    "sat": 69,
+    "sun": 54
+   },
+   "6": {
+    "workday": 316,
+    "sevenday": 268,
+    "mon": 285,
+    "fri": 318,
+    "sat": 169,
+    "sun": 124
+   },
+   "7": {
+    "workday": 799,
+    "sevenday": 673,
+    "mon": 745,
+    "fri": 780,
+    "sat": 406,
+    "sun": 311
+   },
+   "8": {
+    "workday": 874,
+    "sevenday": 741,
+    "mon": 827,
+    "fri": 865,
+    "sat": 534,
+    "sun": 285
+   },
+   "9": {
+    "workday": 825,
+    "sevenday": 736,
+    "mon": 770,
+    "fri": 800,
+    "sat": 648,
+    "sun": 385
+   },
+   "10": {
+    "workday": 769,
+    "sevenday": 737,
+    "mon": 729,
+    "fri": 788,
+    "sat": 733,
+    "sun": 586
+   },
+   "11": {
+    "workday": 794,
+    "sevenday": 777,
+    "mon": 760,
+    "fri": 843,
+    "sat": 815,
+    "sun": 660
+   },
+   "12": {
+    "workday": 838,
+    "sevenday": 853,
+    "mon": 819,
+    "fri": 868,
+    "sat": 871,
+    "sun": 910
+   },
+   "13": {
+    "workday": 857,
+    "sevenday": 878,
+    "mon": 834,
+    "fri": 884,
+    "sat": 871,
+    "sun": 988
+   },
+   "14": {
+    "workday": 872,
+    "sevenday": 876,
+    "mon": 831,
+    "fri": 917,
+    "sat": 836,
+    "sun": 936
+   },
+   "15": {
+    "workday": 878,
+    "sevenday": 869,
+    "mon": 852,
+    "fri": 884,
+    "sat": 809,
+    "sun": 883
+   },
+   "16": {
+    "workday": 909,
+    "sevenday": 888,
+    "mon": 876,
+    "fri": 895,
+    "sat": 807,
+    "sun": 862
+   },
+   "17": {
+    "workday": 931,
+    "sevenday": 901,
+    "mon": 928,
+    "fri": 922,
+    "sat": 846,
+    "sun": 808
+   },
+   "18": {
+    "workday": 933,
+    "sevenday": 889,
+    "mon": 899,
+    "fri": 888,
+    "sat": 801,
+    "sun": 762
+   },
+   "19": {
+    "workday": 894,
+    "sevenday": 841,
+    "mon": 825,
+    "fri": 884,
+    "sat": 753,
+    "sun": 665
+   },
+   "20": {
+    "workday": 693,
+    "sevenday": 655,
+    "mon": 637,
+    "fri": 690,
+    "sat": 553,
+    "sun": 572
+   },
+   "21": {
+    "workday": 596,
+    "sevenday": 550,
+    "mon": 524,
+    "fri": 606,
+    "sat": 454,
+    "sun": 420
+   },
+   "22": {
+    "workday": 454,
+    "sevenday": 436,
+    "mon": 375,
+    "fri": 554,
+    "sat": 462,
+    "sun": 322
+   },
+   "23": {
+    "workday": 249,
+    "sevenday": 261,
+    "mon": 178,
+    "fri": 380,
+    "sat": 387,
+    "sun": 193
+   }
+  },
+  "to Newtownards (Slow)": {
+   "0": {
+    "workday": 35,
+    "sevenday": 50,
+    "mon": 36,
+    "fri": 46,
+    "sat": 75,
+    "sun": 95
+   },
+   "1": {
+    "workday": 20,
+    "sevenday": 30,
+    "mon": 20,
+    "fri": 26,
+    "sat": 44,
+    "sun": 64
+   },
+   "2": {
+    "workday": 18,
+    "sevenday": 24,
+    "mon": 15,
+    "fri": 29,
+    "sat": 31,
+    "sun": 48
+   },
+   "3": {
+    "workday": 12,
+    "sevenday": 15,
+    "mon": 10,
+    "fri": 14,
+    "sat": 19,
+    "sun": 27
+   },
+   "4": {
+    "workday": 15,
+    "sevenday": 15,
+    "mon": 15,
+    "fri": 19,
+    "sat": 14,
+    "sun": 15
+   },
+   "5": {
+    "workday": 38,
+    "sevenday": 32,
+    "mon": 38,
+    "fri": 41,
+    "sat": 20,
+    "sun": 15
+   },
+   "6": {
+    "workday": 106,
+    "sevenday": 88,
+    "mon": 97,
+    "fri": 105,
+    "sat": 49,
+    "sun": 39
+   },
+   "7": {
+    "workday": 37,
+    "sevenday": 41,
+    "mon": 35,
+    "fri": 36,
+    "sat": 15,
+    "sun": 88
+   },
+   "8": {
+    "workday": 40,
+    "sevenday": 43,
+    "mon": 37,
+    "fri": 39,
+    "sat": 23,
+    "sun": 75
+   },
+   "9": {
+    "workday": 45,
+    "sevenday": 54,
+    "mon": 43,
+    "fri": 41,
+    "sat": 30,
+    "sun": 122
+   },
+   "10": {
+    "workday": 39,
+    "sevenday": 58,
+    "mon": 36,
+    "fri": 38,
+    "sat": 27,
+    "sun": 182
+   },
+   "11": {
+    "workday": 35,
+    "sevenday": 58,
+    "mon": 36,
+    "fri": 36,
+    "sat": 32,
+    "sun": 200
+   },
+   "12": {
+    "workday": 36,
+    "sevenday": 76,
+    "mon": 36,
+    "fri": 37,
+    "sat": 31,
+    "sun": 320
+   },
+   "13": {
+    "workday": 40,
+    "sevenday": 87,
+    "mon": 40,
+    "fri": 43,
+    "sat": 32,
+    "sun": 369
+   },
+   "14": {
+    "workday": 45,
+    "sevenday": 86,
+    "mon": 44,
+    "fri": 47,
+    "sat": 32,
+    "sun": 340
+   },
+   "15": {
+    "workday": 44,
+    "sevenday": 82,
+    "mon": 46,
+    "fri": 43,
+    "sat": 30,
+    "sun": 319
+   },
+   "16": {
+    "workday": 45,
+    "sevenday": 82,
+    "mon": 43,
+    "fri": 44,
+    "sat": 31,
+    "sun": 315
+   },
+   "17": {
+    "workday": 45,
+    "sevenday": 77,
+    "mon": 44,
+    "fri": 42,
+    "sat": 33,
+    "sun": 277
+   },
+   "18": {
+    "workday": 48,
+    "sevenday": 78,
+    "mon": 46,
+    "fri": 44,
+    "sat": 41,
+    "sun": 262
+   },
+   "19": {
+    "workday": 311,
+    "sevenday": 291,
+    "mon": 283,
+    "fri": 297,
+    "sat": 244,
+    "sun": 239
+   },
+   "20": {
+    "workday": 243,
+    "sevenday": 230,
+    "mon": 223,
+    "fri": 233,
+    "sat": 182,
+    "sun": 208
+   },
+   "21": {
+    "workday": 210,
+    "sevenday": 195,
+    "mon": 185,
+    "fri": 207,
+    "sat": 157,
+    "sun": 156
+   },
+   "22": {
+    "workday": 162,
+    "sevenday": 156,
+    "mon": 134,
+    "fri": 193,
+    "sat": 165,
+    "sun": 116
+   },
+   "23": {
+    "workday": 86,
+    "sevenday": 90,
+    "mon": 60,
+    "fri": 127,
+    "sat": 133,
+    "sun": 67
+   }
+  },
+  "to Newtownards (Fast)": {
+   "0": {
+    "workday": 77,
+    "sevenday": 104,
+    "mon": 78,
+    "fri": 93,
+    "sat": 159,
+    "sun": 185
+   },
+   "1": {
+    "workday": 49,
+    "sevenday": 70,
+    "mon": 48,
+    "fri": 63,
+    "sat": 103,
+    "sun": 144
+   },
+   "2": {
+    "workday": 38,
+    "sevenday": 52,
+    "mon": 32,
+    "fri": 55,
+    "sat": 68,
+    "sun": 107
+   },
+   "3": {
+    "workday": 27,
+    "sevenday": 36,
+    "mon": 26,
+    "fri": 29,
+    "sat": 47,
+    "sun": 71
+   },
+   "4": {
+    "workday": 30,
+    "sevenday": 32,
+    "mon": 29,
+    "fri": 33,
+    "sat": 34,
+    "sun": 41
+   },
+   "5": {
+    "workday": 65,
+    "sevenday": 59,
+    "mon": 65,
+    "fri": 69,
+    "sat": 49,
+    "sun": 39
+   },
+   "6": {
+    "workday": 210,
+    "sevenday": 179,
+    "mon": 188,
+    "fri": 213,
+    "sat": 120,
+    "sun": 85
+   },
+   "7": {
+    "workday": 763,
+    "sevenday": 632,
+    "mon": 711,
+    "fri": 744,
+    "sat": 392,
+    "sun": 223
+   },
+   "8": {
+    "workday": 833,
+    "sevenday": 698,
+    "mon": 790,
+    "fri": 827,
+    "sat": 511,
+    "sun": 210
+   },
+   "9": {
+    "workday": 780,
+    "sevenday": 683,
+    "mon": 727,
+    "fri": 759,
+    "sat": 617,
+    "sun": 263
+   },
+   "10": {
+    "workday": 730,
+    "sevenday": 680,
+    "mon": 692,
+    "fri": 750,
+    "sat": 706,
+    "sun": 404
+   },
+   "11": {
+    "workday": 759,
+    "sevenday": 719,
+    "mon": 724,
+    "fri": 807,
+    "sat": 783,
+    "sun": 460
+   },
+   "12": {
+    "workday": 803,
+    "sevenday": 777,
+    "mon": 783,
+    "fri": 831,
+    "sat": 840,
+    "sun": 589
+   },
+   "13": {
+    "workday": 817,
+    "sevenday": 791,
+    "mon": 793,
+    "fri": 841,
+    "sat": 840,
+    "sun": 619
+   },
+   "14": {
+    "workday": 827,
+    "sevenday": 790,
+    "mon": 787,
+    "fri": 870,
+    "sat": 804,
+    "sun": 596
+   },
+   "15": {
+    "workday": 834,
+    "sevenday": 787,
+    "mon": 806,
+    "fri": 841,
+    "sat": 779,
+    "sun": 564
+   },
+   "16": {
+    "workday": 864,
+    "sevenday": 805,
+    "mon": 833,
+    "fri": 852,
+    "sat": 776,
+    "sun": 546
+   },
+   "17": {
+    "workday": 886,
+    "sevenday": 825,
+    "mon": 883,
+    "fri": 880,
+    "sat": 813,
+    "sun": 531
+   },
+   "18": {
+    "workday": 884,
+    "sevenday": 811,
+    "mon": 853,
+    "fri": 844,
+    "sat": 760,
+    "sun": 500
+   },
+   "19": {
+    "workday": 584,
+    "sevenday": 550,
+    "mon": 542,
+    "fri": 587,
+    "sat": 508,
+    "sun": 426
+   },
+   "20": {
+    "workday": 449,
+    "sevenday": 426,
+    "mon": 415,
+    "fri": 457,
+    "sat": 371,
+    "sun": 364
+   },
+   "21": {
+    "workday": 385,
+    "sevenday": 355,
+    "mon": 340,
+    "fri": 399,
+    "sat": 297,
+    "sun": 264
+   },
+   "22": {
+    "workday": 291,
+    "sevenday": 280,
+    "mon": 241,
+    "fri": 361,
+    "sat": 297,
+    "sun": 207
+   },
+   "23": {
+    "workday": 163,
+    "sevenday": 171,
+    "mon": 118,
+    "fri": 253,
+    "sat": 254,
+    "sun": 126
+   }
+  }
+ },
+ "921": {
+  "All directions": {
+   "0": {
+    "workday": 84,
+    "sevenday": 119,
+    "mon": 82,
+    "fri": 105,
+    "sat": 177,
+    "sun": 230
+   },
+   "1": {
+    "workday": 54,
+    "sevenday": 79,
+    "mon": 55,
+    "fri": 66,
+    "sat": 112,
+    "sun": 167
+   },
+   "2": {
+    "workday": 40,
+    "sevenday": 56,
+    "mon": 39,
+    "fri": 50,
+    "sat": 81,
+    "sun": 110
+   },
+   "3": {
+    "workday": 45,
+    "sevenday": 52,
+    "mon": 44,
+    "fri": 49,
+    "sat": 60,
+    "sun": 77
+   },
+   "4": {
+    "workday": 92,
+    "sevenday": 85,
+    "mon": 89,
+    "fri": 96,
+    "sat": 70,
+    "sun": 61
+   },
+   "5": {
+    "workday": 234,
+    "sevenday": 199,
+    "mon": 231,
+    "fri": 231,
+    "sat": 139,
+    "sun": 87
+   },
+   "6": {
+    "workday": 681,
+    "sevenday": 547,
+    "mon": 644,
+    "fri": 641,
+    "sat": 254,
+    "sun": 173
+   },
+   "7": {
+    "workday": 1041,
+    "sevenday": 844,
+    "mon": 969,
+    "fri": 1003,
+    "sat": 421,
+    "sun": 284
+   },
+   "8": {
+    "workday": 882,
+    "sevenday": 771,
+    "mon": 815,
+    "fri": 890,
+    "sat": 662,
+    "sun": 336
+   },
+   "9": {
+    "workday": 844,
+    "sevenday": 774,
+    "mon": 760,
+    "fri": 867,
+    "sat": 721,
+    "sun": 480
+   },
+   "10": {
+    "workday": 799,
+    "sevenday": 784,
+    "mon": 765,
+    "fri": 816,
+    "sat": 740,
+    "sun": 754
+   },
+   "11": {
+    "workday": 824,
+    "sevenday": 811,
+    "mon": 795,
+    "fri": 831,
+    "sat": 819,
+    "sun": 735
+   },
+   "12": {
+    "workday": 838,
+    "sevenday": 848,
+    "mon": 825,
+    "fri": 839,
+    "sat": 841,
+    "sun": 906
+   },
+   "13": {
+    "workday": 843,
+    "sevenday": 861,
+    "mon": 811,
+    "fri": 847,
+    "sat": 826,
+    "sun": 980
+   },
+   "14": {
+    "workday": 835,
+    "sevenday": 843,
+    "mon": 807,
+    "fri": 832,
+    "sat": 809,
+    "sun": 914
+   },
+   "15": {
+    "workday": 839,
+    "sevenday": 838,
+    "mon": 808,
+    "fri": 850,
+    "sat": 787,
+    "sun": 883
+   },
+   "16": {
+    "workday": 853,
+    "sevenday": 851,
+    "mon": 823,
+    "fri": 849,
+    "sat": 810,
+    "sun": 880
+   },
+   "17": {
+    "workday": 850,
+    "sevenday": 844,
+    "mon": 814,
+    "fri": 857,
+    "sat": 848,
+    "sun": 814
+   },
+   "18": {
+    "workday": 816,
+    "sevenday": 805,
+    "mon": 752,
+    "fri": 893,
+    "sat": 805,
+    "sun": 753
+   },
+   "19": {
+    "workday": 802,
+    "sevenday": 756,
+    "mon": 770,
+    "fri": 815,
+    "sat": 691,
+    "sun": 592
+   },
+   "20": {
+    "workday": 661,
+    "sevenday": 632,
+    "mon": 629,
+    "fri": 642,
+    "sat": 556,
+    "sun": 562
+   },
+   "21": {
+    "workday": 500,
+    "sevenday": 469,
+    "mon": 442,
+    "fri": 494,
+    "sat": 420,
+    "sun": 367
+   },
+   "22": {
+    "workday": 325,
+    "sevenday": 320,
+    "mon": 288,
+    "fri": 376,
+    "sat": 375,
+    "sun": 242
+   },
+   "23": {
+    "workday": 177,
+    "sevenday": 189,
+    "mon": 133,
+    "fri": 266,
+    "sat": 293,
+    "sun": 148
+   }
+  },
+  "to Belfast (Slow)": {
+   "0": {
+    "workday": 20,
+    "sevenday": 30,
+    "mon": 20,
+    "fri": 24,
+    "sat": 45,
+    "sun": 61
+   },
+   "1": {
+    "workday": 12,
+    "sevenday": 19,
+    "mon": 13,
+    "fri": 15,
+    "sat": 26,
+    "sun": 44
+   },
+   "2": {
+    "workday": 8,
+    "sevenday": 12,
+    "mon": 8,
+    "fri": 10,
+    "sat": 17,
+    "sun": 26
+   },
+   "3": {
+    "workday": 10,
+    "sevenday": 11,
+    "mon": 11,
+    "fri": 12,
+    "sat": 13,
+    "sun": 16
+   },
+   "4": {
+    "workday": 25,
+    "sevenday": 22,
+    "mon": 22,
+    "fri": 26,
+    "sat": 17,
+    "sun": 12
+   },
+   "5": {
+    "workday": 69,
+    "sevenday": 58,
+    "mon": 67,
+    "fri": 69,
+    "sat": 37,
+    "sun": 22
+   },
+   "6": {
+    "workday": 187,
+    "sevenday": 151,
+    "mon": 178,
+    "fri": 176,
+    "sat": 72,
+    "sun": 51
+   },
+   "7": {
+    "workday": 63,
+    "sevenday": 57,
+    "mon": 56,
+    "fri": 60,
+    "sat": 16,
+    "sun": 70
+   },
+   "8": {
+    "workday": 74,
+    "sevenday": 67,
+    "mon": 66,
+    "fri": 71,
+    "sat": 24,
+    "sun": 75
+   },
+   "9": {
+    "workday": 54,
+    "sevenday": 62,
+    "mon": 49,
+    "fri": 52,
+    "sat": 35,
+    "sun": 129
+   },
+   "10": {
+    "workday": 39,
+    "sevenday": 64,
+    "mon": 37,
+    "fri": 41,
+    "sat": 37,
+    "sun": 212
+   },
+   "11": {
+    "workday": 38,
+    "sevenday": 61,
+    "mon": 38,
+    "fri": 42,
+    "sat": 39,
+    "sun": 195
+   },
+   "12": {
+    "workday": 40,
+    "sevenday": 69,
+    "mon": 38,
+    "fri": 44,
+    "sat": 44,
+    "sun": 237
+   },
+   "13": {
+    "workday": 46,
+    "sevenday": 77,
+    "mon": 48,
+    "fri": 47,
+    "sat": 39,
+    "sun": 270
+   },
+   "14": {
+    "workday": 48,
+    "sevenday": 77,
+    "mon": 48,
+    "fri": 48,
+    "sat": 38,
+    "sun": 256
+   },
+   "15": {
+    "workday": 50,
+    "sevenday": 77,
+    "mon": 48,
+    "fri": 51,
+    "sat": 35,
+    "sun": 248
+   },
+   "16": {
+    "workday": 47,
+    "sevenday": 74,
+    "mon": 46,
+    "fri": 47,
+    "sat": 39,
+    "sun": 238
+   },
+   "17": {
+    "workday": 37,
+    "sevenday": 63,
+    "mon": 33,
+    "fri": 41,
+    "sat": 36,
+    "sun": 216
+   },
+   "18": {
+    "workday": 43,
+    "sevenday": 65,
+    "mon": 38,
+    "fri": 45,
+    "sat": 35,
+    "sun": 204
+   },
+   "19": {
+    "workday": 196,
+    "sevenday": 185,
+    "mon": 191,
+    "fri": 192,
+    "sat": 166,
+    "sun": 151
+   },
+   "20": {
+    "workday": 151,
+    "sevenday": 148,
+    "mon": 144,
+    "fri": 145,
+    "sat": 132,
+    "sun": 149
+   },
+   "21": {
+    "workday": 122,
+    "sevenday": 117,
+    "mon": 111,
+    "fri": 121,
+    "sat": 108,
+    "sun": 100
+   },
+   "22": {
+    "workday": 81,
+    "sevenday": 81,
+    "mon": 71,
+    "fri": 96,
+    "sat": 96,
+    "sun": 64
+   },
+   "23": {
+    "workday": 46,
+    "sevenday": 49,
+    "mon": 34,
+    "fri": 68,
+    "sat": 79,
+    "sun": 35
+   }
+  },
+  "to Belfast (Fast)": {
+   "0": {
+    "workday": 64,
+    "sevenday": 89,
+    "mon": 63,
+    "fri": 80,
+    "sat": 132,
+    "sun": 169
+   },
+   "1": {
+    "workday": 42,
+    "sevenday": 60,
+    "mon": 42,
+    "fri": 51,
+    "sat": 85,
+    "sun": 124
+   },
+   "2": {
+    "workday": 32,
+    "sevenday": 44,
+    "mon": 31,
+    "fri": 40,
+    "sat": 64,
+    "sun": 85
+   },
+   "3": {
+    "workday": 35,
+    "sevenday": 40,
+    "mon": 33,
+    "fri": 38,
+    "sat": 47,
+    "sun": 61
+   },
+   "4": {
+    "workday": 67,
+    "sevenday": 63,
+    "mon": 67,
+    "fri": 70,
+    "sat": 53,
+    "sun": 49
+   },
+   "5": {
+    "workday": 165,
+    "sevenday": 142,
+    "mon": 164,
+    "fri": 162,
+    "sat": 102,
+    "sun": 66
+   },
+   "6": {
+    "workday": 494,
+    "sevenday": 396,
+    "mon": 466,
+    "fri": 465,
+    "sat": 182,
+    "sun": 122
+   },
+   "7": {
+    "workday": 978,
+    "sevenday": 787,
+    "mon": 913,
+    "fri": 943,
+    "sat": 404,
+    "sun": 214
+   },
+   "8": {
+    "workday": 808,
+    "sevenday": 704,
+    "mon": 749,
+    "fri": 819,
+    "sat": 638,
+    "sun": 261
+   },
+   "9": {
+    "workday": 790,
+    "sevenday": 712,
+    "mon": 712,
+    "fri": 815,
+    "sat": 685,
+    "sun": 351
+   },
+   "10": {
+    "workday": 760,
+    "sevenday": 720,
+    "mon": 728,
+    "fri": 775,
+    "sat": 704,
+    "sun": 541
+   },
+   "11": {
+    "workday": 786,
+    "sevenday": 749,
+    "mon": 758,
+    "fri": 789,
+    "sat": 780,
+    "sun": 540
+   },
+   "12": {
+    "workday": 798,
+    "sevenday": 779,
+    "mon": 787,
+    "fri": 795,
+    "sat": 797,
+    "sun": 669
+   },
+   "13": {
+    "workday": 798,
+    "sevenday": 784,
+    "mon": 763,
+    "fri": 800,
+    "sat": 787,
+    "sun": 710
+   },
+   "14": {
+    "workday": 787,
+    "sevenday": 766,
+    "mon": 759,
+    "fri": 784,
+    "sat": 771,
+    "sun": 657
+   },
+   "15": {
+    "workday": 789,
+    "sevenday": 761,
+    "mon": 760,
+    "fri": 799,
+    "sat": 752,
+    "sun": 635
+   },
+   "16": {
+    "workday": 806,
+    "sevenday": 777,
+    "mon": 777,
+    "fri": 801,
+    "sat": 771,
+    "sun": 641
+   },
+   "17": {
+    "workday": 812,
+    "sevenday": 781,
+    "mon": 781,
+    "fri": 816,
+    "sat": 812,
+    "sun": 598
+   },
+   "18": {
+    "workday": 773,
+    "sevenday": 740,
+    "mon": 714,
+    "fri": 848,
+    "sat": 771,
+    "sun": 550
+   },
+   "19": {
+    "workday": 606,
+    "sevenday": 571,
+    "mon": 579,
+    "fri": 622,
+    "sat": 525,
+    "sun": 440
+   },
+   "20": {
+    "workday": 510,
+    "sevenday": 484,
+    "mon": 485,
+    "fri": 497,
+    "sat": 423,
+    "sun": 413
+   },
+   "21": {
+    "workday": 377,
+    "sevenday": 352,
+    "mon": 331,
+    "fri": 373,
+    "sat": 312,
+    "sun": 267
+   },
+   "22": {
+    "workday": 243,
+    "sevenday": 239,
+    "mon": 217,
+    "fri": 281,
+    "sat": 278,
+    "sun": 178
+   },
+   "23": {
+    "workday": 131,
+    "sevenday": 140,
+    "mon": 99,
+    "fri": 198,
+    "sat": 214,
+    "sun": 113
+   }
+  }
+ }
+}

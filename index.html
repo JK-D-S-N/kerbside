@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en-GB" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kerbside — Upper Newtownards Road</title>
+<meta name="description" content="Corridor scenario modelling for NI road schemes. Test a bus lane against real DfI traffic counts." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230b0e14'/><rect x='6' y='5' width='4' height='22' rx='2' fill='%23d95926'/><rect x='14' y='5' width='4' height='22' rx='2' fill='%233987e5' opacity='.8'/><rect x='22' y='5' width='4' height='22' rx='2' fill='%231baf7a' opacity='.7'/></svg>" />
+</head>
+<body>
+<div id="app">
+  <canvas id="view"></canvas>
+
+  <div id="loading" class="loading"><div class="spinner"></div><span>Building the corridor</span></div>
+
+  <header class="brand card">
+    <div class="brand-mark">
+      <span class="bar b1"></span><span class="bar b2"></span><span class="bar b3"></span>
+    </div>
+    <div class="brand-text">
+      <h1>Kerbside</h1>
+      <p>Upper Newtownards Road, Belfast <span class="sep">·</span> A20</p>
+    </div>
+  </header>
+
+  <div class="verdict card" id="verdict">
+    <div class="verdict-label">Break-even</div>
+    <div class="verdict-figure" id="verdictFigure">—</div>
+    <p class="verdict-body" id="verdictBody">Working it out.</p>
+  </div>
+
+  <button class="finding-toggle card" id="findingToggle" aria-expanded="false">
+    <span class="dot"></span> What the count data actually shows
+  </button>
+
+  <div class="finding card" id="finding" hidden>
+    <button class="finding-close" id="findingClose" aria-label="Close">×</button>
+    <h2>Three things in the raw DfI counts</h2>
+    <ol>
+      <li>
+        <strong>The bus lane is visible in the loop data, to the hour.</strong>
+        Inbound nearside-lane flow collapses from <b>187</b> vehicles at 06:00 to
+        <b>63</b> at 07:00, holds under 80 all day, then jumps back to <b>196</b> at
+        19:00. Outbound does the same, 106 to 37, then back to 311. That is the
+        07:00 to 19:00 restriction, written into the counts.
+      </li>
+      <li>
+        <strong>Traffic is down on this road, not up.</strong>
+        Inbound AADT was <b>16,850</b> in 2016 and <b>13,380</b> in 2023, about
+        21% lower. Outbound went 15,840 to 13,350. Covid and home working are
+        tangled up in that, but the volume is not higher than it was before the
+        lane changed.
+      </li>
+      <li>
+        <strong>The morning peak has spread, which is what a capacity-constrained
+        road looks like.</strong> Inbound flow peaks at <b>07:00</b>, not 08:00,
+        and the offside lane carries <b>978</b> vehicles in that hour, within about
+        1% of the modelled capacity of a single lane. People are leaving earlier to
+        get ahead of it.
+      </li>
+    </ol>
+    <p class="finding-note">
+      One more thing worth knowing before the argument starts: the 2017 change made
+      this bus lane <em>less</em> restrictive, not more. It ran 24 hours before
+      23 January 2017 and 07:00 to 19:00 after.
+    </p>
+  </div>
+
+  <section class="readout card">
+    <div class="timebar">
+      <button id="playBtn" class="play" aria-label="Play the day">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+      </button>
+      <div class="time-slider">
+        <input type="range" id="hour" min="0" max="23" step="1" value="8" aria-label="Hour of day" />
+        <div class="time-ticks" id="timeTicks"></div>
+      </div>
+      <div class="time-value"><span id="hourLabel">08:00</span><em id="laneState">bus lane on</em></div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="chart-head">
+      <h3>Person-hours of delay by hour</h3>
+      <div class="chart-actions">
+        <div class="legend">
+          <span><i style="background:#d95926"></i>Scenario</span>
+          <span><i style="background:#3987e5"></i>Baseline: no reallocation</span>
+        </div>
+        <button id="tableBtn" class="ghost" aria-pressed="false">Table</button>
+      </div>
+    </div>
+    <div class="chart-wrap" id="chartWrap">
+      <div class="chart-tooltip" id="chartTooltip" hidden></div>
+    </div>
+    <div class="table-wrap" id="tableWrap" hidden>
+      <table>
+        <thead><tr><th>Hour</th><th>Bus lane</th><th class="num">Scenario</th><th class="num">Baseline</th><th class="num">Difference</th></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="panel-scroll">
+
+      <div class="group">
+        <h2>Scenario</h2>
+        <div class="presets" id="presets"></div>
+        <p class="preset-detail" id="presetDetail"></p>
+      </div>
+
+      <div class="group">
+        <h2>Road layout</h2>
+        <label class="switch">
+          <input type="checkbox" id="busLaneOn" checked />
+          <span class="track"><span class="thumb"></span></span>
+          <span class="switch-label">Kerbside bus lane</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="busLanePeakOnly" />
+          <span class="track"><span class="thumb"></span></span>
+          <span class="switch-label">Peak hours only <em>07–10, 16–19</em></span>
+        </label>
+        <div class="range-pair" id="laneHours">
+          <div class="field">
+            <label for="busLaneStart">Starts</label>
+            <input type="range" id="busLaneStart" min="0" max="23" step="1" value="7" />
+            <output id="busLaneStartOut">07:00</output>
+          </div>
+          <div class="field">
+            <label for="busLaneEnd">Ends</label>
+            <input type="range" id="busLaneEnd" min="1" max="24" step="1" value="19" />
+            <output id="busLaneEndOut">19:00</output>
+          </div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="bikeLaneOn" />
+          <span class="track"><span class="thumb"></span></span>
+          <span class="switch-label">Protected cycle lane <em>takes a second lane</em></span>
+        </label>
+        <div class="field">
+          <label for="totalLanes">Lanes each way <output id="totalLanesOut">2</output></label>
+          <input type="range" id="totalLanes" min="1" max="4" step="1" value="2" />
+        </div>
+        <p class="warn" id="laneWarn" hidden>Both reallocations cannot fit in two lanes. One general traffic lane is being retained.</p>
+      </div>
+
+      <div class="group">
+        <h2>Demand</h2>
+        <div class="field">
+          <label for="demandMultiplier">Traffic against 2023 counts <output id="demandOut">100%</output></label>
+          <input type="range" id="demandMultiplier" min="0.5" max="1.6" step="0.01" value="1" />
+        </div>
+        <p class="hint">2023 weekday average, DfI count points 918 and 921. 100% is exactly what the loops recorded.</p>
+      </div>
+
+      <div class="group">
+        <h2>Bus service</h2>
+        <label class="switch">
+          <input type="checkbox" id="busServiceOn" checked />
+          <span class="track"><span class="thumb"></span></span>
+          <span class="switch-label">Glider running</span>
+        </label>
+        <div class="field">
+          <label for="busesPerHour">Buses per hour, each way <output id="busesOut">10</output></label>
+          <input type="range" id="busesPerHour" min="0" max="20" step="1" value="10" />
+        </div>
+        <div class="field">
+          <label for="busLoad">Passengers per bus <output id="loadOut">40</output></label>
+          <input type="range" id="busLoad" min="0" max="105" step="1" value="40" />
+          <div class="capacity-bar"><span id="capacityFill"></span></div>
+          <p class="hint" id="capacityHint">38% of a 105-seat Glider. 800 passengers an hour each way.</p>
+        </div>
+      </div>
+
+      <details class="group collapsible">
+        <summary><h2>Model assumptions</h2><span class="chev"></span></summary>
+        <div class="collapsible-body" id="assumptions"></div>
+        <button class="ghost wide" id="resetAssumptions">Reset to defaults</button>
+      </details>
+
+      <details class="group collapsible">
+        <summary><h2>Method</h2><span class="chev"></span></summary>
+        <div class="collapsible-body prose">
+          <p><b>Capacity</b> is lanes available to general traffic × saturation flow × effective green.</p>
+          <p><b>Delay</b> is Webster uniform signal delay at each junction on the link, plus a BPR link delay, plus a deterministic queueing term once demand passes capacity.</p>
+          <p><b>Person-hours</b> weight car delay by occupancy and bus delay by the passengers on board. Bus dwell at halts is counted as part of the bus's own free-flow time, not as congestion.</p>
+          <p><b>Emissions</b> come from average link speed on a COPERT-shaped curve, so a slower journey emits more per kilometre.</p>
+          <p class="calib"><b>Calibration.</b> One general traffic lane at the default settings gives 990 vehicles per hour. The loops recorded 978 in the inbound offside lane at the 07:00 peak in 2023. That is corroboration, not proof: a count cannot exceed capacity, so a peak close to capacity is consistent with the model without independently verifying it.</p>
+        </div>
+      </details>
+
+      <details class="group collapsible">
+        <summary><h2>What this does not model</h2><span class="chev"></span></summary>
+        <div class="collapsible-body"><ul class="limits" id="limitations"></ul></div>
+      </details>
+
+      <details class="group collapsible">
+        <summary><h2>Sources</h2><span class="chev"></span></summary>
+        <div class="collapsible-body"><div class="sources" id="sources"></div></div>
+      </details>
+
+      <p class="footnote">
+        Built for Builders Night 001, Ormeau Labs, 10 September 2026.
+        Real counts, an editable model, and a deliberately visible list of what it cannot tell you.
+      </p>
+    </div>
+  </aside>
+
+  <div class="hud" id="hud"></div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
