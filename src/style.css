@@ -574,10 +574,6 @@ input[type="range"]:focus-visible { outline: 2px solid var(--baseline); outline-
 }
 .block-note { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.06em; color: var(--ink-3); }
 
-/* Locator plan. */
-.locator { width: 100%; }
-.locator svg { display: block; width: 100%; height: auto; }
-
 /* The verdict is the headline, so it is the one thing set large. */
 .block-verdict .verdict, .block-verdict .finding-toggle {
   position: static; background: none; border: 0; padding: 0; margin: 0; width: 100%;
@@ -655,3 +651,40 @@ input[type="range"]:focus-visible { outline: 2px solid var(--baseline); outline-
 .preset { background: transparent; color: var(--ink-2); }
 .preset:hover { border-color: var(--scheme); color: var(--ink); }
 .preset.on { background: var(--scheme); border-color: var(--scheme); color: var(--bg); }
+
+/* ==========================================================================
+   Header, HUD and the one exception to square.
+   ========================================================================== */
+
+/* The title carries the toggle on its own line, right-aligned to it. */
+.title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.rail-head h1 {
+  text-transform: uppercase;
+  font-size: 34px;
+  letter-spacing: -0.012em;
+  font-weight: 600;
+}
+.theme-toggle { flex: none; }
+
+/* Transport controls are the exception the system allows: a genuine circle on
+   a genuine dot. A square play button reads as a stop button. */
+.play {
+  border-radius: 50% !important;
+  width: 34px; height: 34px;
+}
+
+/* The HUD sits off the corner and stays out of the way of the corridor. */
+.hud {
+  top: 30px; right: 30px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-2);
+  opacity: 0.55;
+  padding: 7px 12px;
+  transition: opacity 0.2s ease;
+}
+.hud:hover { opacity: 1; }
+
+/* JetBrains Mono has no subscript two, so CO₂ fell back to a colon. */
+.kpi-label { font-feature-settings: "subs" 0; }
+.kpi-label .sub { font-family: var(--font); }

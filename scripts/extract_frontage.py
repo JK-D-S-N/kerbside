@@ -17,7 +17,7 @@ OVERPASS = [
     'https://overpass.kumi.systems/api/interpreter',
     'https://overpass.private.coffee/api/interpreter',
 ]
-SECTION_LEN = 400.0      # metres of road to model, matching ROAD_LEN in scene.js
+SECTION_LEN = 800.0      # metres of road to model, matching ROAD_LEN in scene.js
 CORRIDOR = 95.0          # how far back from the centreline to take frontage
 MIN_SETBACK = 7.0        # ignore anything sitting on the carriageway
 LEVEL_HEIGHT = 3.1       # metres per storey
@@ -281,7 +281,7 @@ def main():
             continue
         for n in el.get('geometry') or []:
             x, z = project((n['lat'], n['lon']))
-            if abs(z) > half - 12 or abs(x) > 26:
+            if abs(z) > half - 12 or abs(x) > 34:
                 continue
             prev = streets.get(name)
             if prev is None or abs(x) < abs(prev[0]):

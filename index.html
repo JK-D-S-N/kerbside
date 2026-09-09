@@ -125,7 +125,8 @@
 
   <div class="results">
     <div class="rail-head">
-      <div class="rail-top">
+      <div class="title-row">
+        <h1>Kerbside</h1>
     <button id="themeToggle" class="theme-toggle" type="button"
             aria-label="Switch to light mode" title="Light mode">
       <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
@@ -138,7 +139,6 @@
       </svg>
     </button>
       </div>
-      <h1>Kerbside</h1>
       <div class="chips">
         <span class="chip">Upper Newtownards Road · A20</span>
         <span class="chip">Stormont gates, Belfast</span>
@@ -147,10 +147,6 @@
     </div>
 
     <div class="results-scroll">
-      <section class="block">
-        <div class="block-head"><h2>Where this is</h2><span class="block-note" id="locNote">400 m section</span></div>
-        <div class="locator" id="locator"></div>
-      </section>
 
       <section class="block block-verdict">
   <div class="verdict card" id="verdict">
@@ -172,8 +168,8 @@
       <h3>Person-hours of delay by hour</h3>
       <div class="chart-actions">
         <div class="legend">
-          <span><i style="background:#d95926"></i>Scenario</span>
-          <span><i style="background:#3987e5"></i>Baseline: no reallocation</span>
+          <span><i style="background:var(--scheme)"></i>Scenario</span>
+          <span><i style="background:var(--baseline)"></i>Baseline: no reallocation</span>
         </div>
         <button id="tableBtn" class="ghost" aria-pressed="false">Table</button>
       </div>

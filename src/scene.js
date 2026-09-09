@@ -10,13 +10,24 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { FRONTAGE, STREETS, TREES } from './frontage.js';
+import { FRONTAGE, STREETS, TREES, AVENUE, ESTATE_BOUNDARY } from './frontage.js';
 
 export const LANE_W = 3.2;
-export const ROAD_LEN = 400;
+export const ROAD_LEN = 800;
 export const HALF = ROAD_LEN / 2;
 export const KERB_X = 6.4;         // carriageway edge
 export const FOOTWAY_X = 10.0;     // back of footway
+
+/** The Stormont estate gates, from the Prince of Wales Avenue junction. */
+export const GATES_Z = (() => {
+  let best = null;
+  for (const run of AVENUE) {
+    for (const [x, z] of run) {
+      if (Math.abs(x) < 60 && (best === null || Math.abs(x) < Math.abs(best[0]))) best = [x, z];
+    }
+  }
+  return best ? best[1] : 331;
+})();
 
 /** Lane centre lines. Nearside is the kerbside lane in each direction. */
 export const LANES = [
@@ -36,7 +47,25 @@ function mulberry32(seed) {
   };
 }
 
-/** Where a signal sits along each direction, as world z. */
+/**
+ * Signalised junctions along the drawn length, as world z.
+ *
+ * These are the real ones: every side street that meets the corridor inside
+ * the section, plus the Stormont gates. One signal in the middle of an 800 m
+ * arterial was the reason the picture never looked like the road, because it
+ * is the stopping that makes the queue, not the volume.
+ */
+export const JUNCTION_Z = (() => {
+  const zs = STREETS.map((st) => st.z);
+  zs.push(GATES_Z);
+  return zs
+    .filter((z) => Math.abs(z) < HALF - 30)
+    .sort((a, b) => a - b)
+    // Merge junctions closer than 40 m; they operate as one stop line.
+    .filter((z, i, all) => i === 0 || z - all[i - 1] > 40);
+})();
+
+/** Kept for the single-stop-line callers; the first junction each way. */
 export const SIGNAL_Z = { inbound: -HALF + 70, outbound: HALF - 70 };
 
 /** Glider halts, as world z, one each way. */
@@ -243,6 +272,69 @@ export function buildScene(renderer) {
     quads.forEach((q) => q.dispose());
   }
 
+  // ---- Stormont ----------------------------------------------------------
+  // The gates are the one thing on this road that tells a Belfast audience
+  // exactly where they are standing. Piers, railings along the estate wall,
+  // and the avenue running away up the hill.
+  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6a7180, roughness: 0.92 });
+  const ironMat = new THREE.MeshStandardMaterial({ color: 0x22262e, roughness: 0.5, metalness: 0.6 });
+  const gateGroup = new THREE.Group();
+
+  if (Math.abs(GATES_Z) < HALF) {
+    const side = 1;   // the estate is the north side of the road
+    for (const off of [-9, -3.2, 3.2, 9]) {
+      const pier = new THREE.Mesh(new THREE.BoxGeometry(1.5, off === -9 || off === 9 ? 6.2 : 5.2, 1.5), stoneMat);
+      pier.position.set(side * (FOOTWAY_X + 2.2), (off === -9 || off === 9 ? 6.2 : 5.2) / 2, GATES_Z + off);
+      pier.castShadow = true;
+      gateGroup.add(pier);
+    }
+    // Gate leaves between the inner piers.
+    for (const off of [-1.6, 1.6]) {
+      const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.6, 3.1), ironMat);
+      leaf.position.set(side * (FOOTWAY_X + 2.2), 1.9, GATES_Z + off);
+      gateGroup.add(leaf);
+    }
+    // The avenue, as a pale strip running away from the road.
+    const avenue = new THREE.Mesh(
+      new THREE.PlaneGeometry(150, 13),
+      new THREE.MeshStandardMaterial({ color: 0x4a5260, roughness: 0.95 })
+    );
+    avenue.rotation.x = -Math.PI / 2;
+    avenue.position.set(side * (FOOTWAY_X + 78), 0.03, GATES_Z);
+    gateGroup.add(avenue);
+
+    // Its lime avenue, which is what you actually see from the road.
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3a3128, roughness: 1 });
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x2f4a2c, roughness: 1 });
+    for (let d = 12; d < 150; d += 13) {
+      for (const w of [-9.5, 9.5]) {
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 4.4, 6), trunkMat);
+        trunk.position.set(side * (FOOTWAY_X + d), 2.2, GATES_Z + w);
+        gateGroup.add(trunk);
+        const crown = new THREE.Mesh(new THREE.SphereGeometry(3.1, 8, 6), leafMat);
+        crown.position.set(side * (FOOTWAY_X + d), 6.1, GATES_Z + w);
+        crown.castShadow = true;
+        gateGroup.add(crown);
+      }
+    }
+  }
+
+  // Estate railings along the boundary, where it runs beside the road.
+  for (const run of ESTATE_BOUNDARY) {
+    for (let i = 0; i < run.length - 1; i++) {
+      const [x1, z1] = run[i];
+      const [x2, z2] = run[i + 1];
+      if (Math.abs(z1) > HALF || Math.abs(x1) > 46 || Math.abs(x1) < FOOTWAY_X - 1) continue;
+      const len = Math.hypot(x2 - x1, z2 - z1);
+      if (len < 1 || len > 60) continue;
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.9, len), ironMat);
+      wall.position.set((x1 + x2) / 2, 0.95, (z1 + z2) / 2);
+      wall.rotation.y = Math.atan2(x2 - x1, z2 - z1);
+      gateGroup.add(wall);
+    }
+  }
+  group.add(gateGroup);
+
   // ---- Street names -------------------------------------------------------
   // Laid flat on the ground at the junction, the way a map prints them. A
   // local reads one of these faster than any coordinate.
@@ -336,6 +428,7 @@ export function buildScene(renderer) {
 
   // ---- Signal heads -------------------------------------------------------
   const signals = {};
+  const signalHeads = { inbound: [], outbound: [] };
   for (const [direction, z] of Object.entries(SIGNAL_Z)) {
     const side = direction === 'inbound' ? -1 : 1;
     const pole = new THREE.Mesh(
