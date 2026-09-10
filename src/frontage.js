@@ -189,3 +189,18 @@ export const STREETS = [
   { name: "Rosemount Avenue", x: -20.5, z: -4.4, side: -1, centre: [[-0.0,-4.4],[-8.5,-8.2],[-12.3,-9.9],[-52.3,-45.1],[-101.6,-88.2]] },
   { name: "Summerhill Avenue", x: -33.7, z: 43.3, side: -1, centre: [[-0.0,43.3],[-6.3,41.5],[-8.6,40.8],[-28.1,36.5],[-61.8,28.8],[-66.6,27.4],[-92.1,20.4],[-109.2,15.5]] },
 ];
+
+/**
+ * Traffic signals on the corridor, at their OSM position.
+ *
+ * `kind` is "head" for a highway=traffic_signals node, one per approach,
+ * and "crossing" for a signal-controlled pedestrian crossing. None of the
+ * side streets in STREETS carries either: they are priority T-junctions.
+ */
+export const SIGNALS = [
+  { id: 12294069100, x: -4.2, z: -63.7, kind: "head" },
+  { id: 12294069098, x: -13.4, z: -29.8, kind: "head" },
+  { id: 12294069060, x: -41.2, z: 72.9, kind: "head" },
+  { id: 2298859257, x: -42.3, z: 77.6, kind: "crossing" },
+  { id: 12294069059, x: -43.2, z: 80.9, kind: "head" },
+];

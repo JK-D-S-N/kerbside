@@ -7,7 +7,10 @@ import {
 } from '../src/model.js';
 import { COUNTS } from '../src/counts.js';
 import { DEFAULT_CONFIG } from '../src/scenarios.js';
-import { JUNCTIONS, JUNCTION_Z, MOUTH_HALF, HALF, ROAD_LEN, KERB_X } from '../src/scene.js';
+import {
+  JUNCTIONS, JUNCTION_Z, MOUTH_HALF, HALF, ROAD_LEN, KERB_X, SIGNAL_INSTALLATIONS,
+} from '../src/scene.js';
+import { SIGNALS } from '../src/frontage.js';
 import { STOP_LINES } from '../src/vehicles.js';
 
 const A = DEFAULT_ASSUMPTIONS;
@@ -247,34 +250,61 @@ test('every drawn junction is one the simulation stops traffic at', () => {
   }
 });
 
-test('the junction mouth is centred on the stop line, not near it', () => {
-  const zOf = {
-    inbound: (s) => HALF - s,
-    outbound: (s) => s - HALF,
-  };
+test('every drawn junction mouth leaves the corridor square, at the kerb', () => {
   for (const j of JUNCTIONS) {
     // The leg leaves the corridor at the kerb, square to it, on the mouth axis.
-    assert.equal(j.leg[0][1], j.z, `${j.name} mouth starts off its own stop line`);
+    assert.equal(j.leg[0][1], j.z, `${j.name} mouth starts off its own axis`);
     assert.equal(Math.abs(j.leg[0][0]), KERB_X, `${j.name} leg does not start at the kerb`);
+  }
+});
 
+// The junctions are priority-controlled, the scene paints give way across
+// their mouths, and OSM tags no signal at any of them. So the simulation must
+// not hold corridor traffic there. This is the check that was missing when it
+// did: the picture showed a give-way marking and the traffic ran the red.
+
+test('no drawn junction is a stop line', () => {
+  const zOf = { inbound: (s) => HALF - s, outbound: (s) => s - HALF };
+  for (const j of JUNCTIONS) {
     for (const dir of ['inbound', 'outbound']) {
-      const lines = STOP_LINES[dir].map(zOf[dir]);
-      const hit = lines.find((z) => Math.abs(z - j.z) < 1e-9);
-      assert.ok(hit !== undefined, `${j.name}: no ${dir} stop line at z=${j.z}`);
-      assert.ok(Math.abs(hit - j.z) < MOUTH_HALF,
-        `${j.name}: ${dir} stop line outside the mouth`);
+      for (const s of STOP_LINES[dir]) {
+        assert.ok(Math.abs(zOf[dir](s) - j.z) >= MOUTH_HALF,
+          `${j.name} at z=${j.z} has a ${dir} stop line in its mouth`);
+      }
     }
   }
 });
 
-test('stop lines only exist where a junction is drawn or the gates are', () => {
-  const drawn = new Set(JUNCTIONS.map((j) => j.z));
-  for (const s of STOP_LINES.inbound) {
-    const z = HALF - s;
-    assert.ok(drawn.has(z) || JUNCTION_Z.some((q) => Math.abs(q - z) < 1e-9),
-      `inbound stop at z=${z} belongs to nothing`);
+test('every stop line is a signal OSM actually records', () => {
+  const heads = SIGNALS.filter((s) => s.kind === 'head').map((s) => s.z);
+  assert.ok(heads.length >= 2, `${heads.length} signal heads in the OSM data`);
+  const zOf = { inbound: (s) => HALF - s, outbound: (s) => s - HALF };
+  for (const dir of ['inbound', 'outbound']) {
+    assert.ok(STOP_LINES[dir].length > 0, `no ${dir} stop lines at all`);
+    for (const s of STOP_LINES[dir]) {
+      const z = zOf[dir](s);
+      assert.ok(heads.some((h) => Math.abs(h - z) < 1e-9),
+        `${dir} stop at z=${z} is not an OSM traffic_signals node`);
+    }
   }
   assert.ok(STOP_LINES.inbound.every((s) => s > 20 && s < ROAD_LEN - 20));
+  assert.ok(STOP_LINES.outbound.every((s) => s > 20 && s < ROAD_LEN - 20));
+});
+
+test('each installation stops each direction on the head it reaches first', () => {
+  assert.ok(SIGNAL_INSTALLATIONS.length >= 2,
+    `${SIGNAL_INSTALLATIONS.length} signal installations inside the section`);
+  for (const inst of SIGNAL_INSTALLATIONS) {
+    // Inbound runs from +z to -z, so its stop line is the head at the larger
+    // z and outbound's is the smaller. A driver stopping at the far head has
+    // already crossed the thing the signal protects.
+    assert.ok(inst.inbound >= inst.outbound,
+      `installation at z=${inst.centre} has its stop lines the wrong way round`);
+    if (inst.crossingZ !== null) {
+      assert.ok(inst.crossingZ >= inst.outbound && inst.crossingZ <= inst.inbound,
+        `crossing at z=${inst.crossingZ} is outside its own stop lines`);
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -394,20 +424,23 @@ function run(sim, seconds, dt = 0.05) {
   for (let i = 0; i < seconds / dt; i++) sim.step(dt);
 }
 
-test('turn points sit exactly on stop lines, inside the drawn mouths', async () => {
+test('turn points sit on the drawn mouths and wait for a gap, not a green', async () => {
   const sim = await turningSim();
   assert.ok(sim.arms.length >= 3, `${sim.arms.length} side-road arms`);
   for (const direction of ['inbound', 'outbound']) {
     for (const pt of sim.turnPoints[direction]) {
-      // The turn happens at the junction the simulation already stops traffic
-      // at. If these ever drift apart, cars turn into the kerb.
-      assert.ok(STOP_LINES[direction].some((s) => Math.abs(s - pt.s) < 1e-6),
-        `${pt.arm.name} ${direction} turn at s=${pt.s} is not a stop line`);
-      assert.equal(STOP_LINES[direction][pt.idx], pt.s,
-        `${pt.arm.name} ${direction} reads the wrong signal`);
+      // The turn happens where the mouth is drawn. If these ever drift apart,
+      // cars turn into the kerb.
       const drawn = JUNCTIONS.find((j) => Math.abs(j.z - pt.arm.z) < 1e-9);
       assert.ok(drawn, `${pt.arm.name} turns into a street that is not drawn`);
       assert.ok(Math.abs(drawn.z - pt.arm.z) < MOUTH_HALF);
+      // None of these is signalised, so a turner reads no signal at all. A
+      // non-null index here means it is reading somebody else's red, which is
+      // what used to hold turning traffic at three give-way junctions.
+      assert.equal(pt.idx, null,
+        `${pt.arm.name} ${direction} reads a signal it does not have`);
+      assert.ok(!STOP_LINES[direction].some((s) => Math.abs(s - pt.s) < 1e-6),
+        `${pt.arm.name} ${direction} turn at s=${pt.s} sits on a stop line`);
     }
   }
 });
@@ -594,6 +627,15 @@ test('the default right-turn share is one the running lane can absorb', async ()
   const p = loadTrend(pushed, 45);
   // Pushing the slider must visibly cost something, or the assumption is not
   // doing any work and there is no point exposing it.
-  assert.ok(p.late.n > s.late.n * 1.15,
-    `raising the right-turn share changed nothing: ${s.late.n.toFixed(1)} vs ${p.late.n.toFixed(1)}`);
+  //
+  // Measured on speed rather than on vehicle count. When these junctions were
+  // wrongly signalised a right turner waited for a green AND a gap, so the
+  // share drove the count hard. They are priority junctions, so he now waits
+  // only for the gap, the cost is smaller and the count response is inside
+  // the run-to-run noise at this share. Speed still separates cleanly: 19.7
+  // mph at the default against 18.1 at 0.05 on the 17:00 outbound peak. The
+  // smaller number is the honest one; it was the phantom red that made the
+  // right turn look as expensive as it did.
+  assert.ok(p.late.mph < s.late.mph * 0.95,
+    `raising the right-turn share changed nothing: ${s.late.mph.toFixed(1)} mph vs ${p.late.mph.toFixed(1)}`);
 });

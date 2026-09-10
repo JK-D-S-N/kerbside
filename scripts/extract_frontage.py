@@ -250,6 +250,48 @@ def side_street_legs(project, half, streets):
     return out
 
 
+def corridor_signals(project, half):
+    """
+    Traffic signals on the corridor, in the scene frame.
+
+    Which junctions are signalised is not a thing to assume. It decides where
+    the simulation is allowed to stop traffic, and assuming it from the
+    junction list put a red light on three residential T-junctions that have
+    give way painted across them. Anyone who drives the road sees that.
+
+    Only two node kinds count. highway=traffic_signals is a signal head, and
+    OSM tags one per approach, so an installation comes back as a pair a few
+    metres apart. crossing=traffic_signals is a signal-controlled pedestrian
+    crossing on the carriageway. A zebra or an unmarked crossing is neither:
+    it holds nobody on a cycle and it is not a stop line.
+    """
+    els = overpass(
+        f'[out:json][timeout:180];'
+        f'way["name"="{ROAD_NAME}"]["highway"]({ROAD_BBOX})->.r;'
+        f'node(w.r)["highway"~"^(traffic_signals|crossing)$"];'
+        f'out;')['elements']
+    out = []
+    for n in els:
+        tags = n.get('tags', {})
+        if tags.get('highway') == 'traffic_signals':
+            kind = 'head'
+        elif tags.get('crossing') == 'traffic_signals':
+            kind = 'crossing'
+        else:
+            continue
+        x, z = project((n['lat'], n['lon']))
+        if abs(z) > half:
+            continue
+        out.append({'id': n['id'], 'x': round(x, 1), 'z': round(z, 1), 'kind': kind})
+    out.sort(key=lambda s: s['z'])
+    heads = sum(1 for s in out if s['kind'] == 'head')
+    print(f'{len(out)} signal nodes inside the section: {heads} heads, '
+          f'{len(out) - heads} signalised crossings')
+    for s in out:
+        print(f"  z={s['z']:+8.1f} x={s['x']:+7.1f} {s['kind']} (node {s['id']})")
+    return out
+
+
 def parliament_buildings(project):
     """The real footprint, its height, and how far it stands above the road."""
     els = overpass(
@@ -421,6 +463,7 @@ def main():
     print(f'{len(streets)} side streets on the section: {", ".join(sorted(streets))}')
 
     legs = side_street_legs(project, half, streets)
+    signals = corridor_signals(project, half)
     left = sum(1 for x in kept if x['side'] == -1)
     best = {'a': a, 'b': b, 'mid': centre, 'left': left,
             'right': len(kept) - left, 'kept': kept, 'way': near['w']}
@@ -521,6 +564,19 @@ def main():
         centre = ','.join(f'[{cx},{cz}]' for cx, cz in run)
         lines.append(f'  {{ name: {json.dumps(name)}, x: {x}, z: {z}, '
                      f'side: {-1 if x < 0 else 1}, centre: [{centre}] }},')
+    lines += ['];', '']
+
+    lines.append('/**')
+    lines.append(' * Traffic signals on the corridor, at their OSM position.')
+    lines.append(' *')
+    lines.append(' * `kind` is "head" for a highway=traffic_signals node, one per approach,')
+    lines.append(' * and "crossing" for a signal-controlled pedestrian crossing. None of the')
+    lines.append(' * side streets in STREETS carries either: they are priority T-junctions.')
+    lines.append(' */')
+    lines.append('export const SIGNALS = [')
+    for s in signals:
+        lines.append(f"  {{ id: {s['id']}, x: {s['x']}, z: {s['z']}, "
+                     f"kind: {json.dumps(s['kind'])} }},")
     lines += ['];', '']
     path.write_text('\n'.join(lines))
     print(f'wrote {path} ({path.stat().st_size / 1024:.0f} kB)')

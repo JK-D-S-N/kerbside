@@ -22,13 +22,28 @@
 /** Free-flow, signal and emissions coefficients. All editable in the UI. */
 export const DEFAULT_ASSUMPTIONS = {
   // Link geometry
-  linkLengthKm: 1.6,        // Stormont gates to Holywood Arches, approx
+  // 1.6 km of the A20 centred on the count points. The comment here used to
+  // read "Stormont gates to Holywood Arches", which is wrong: that stretch is
+  // about 3.1 km, so the figure described twice the road it modelled. The
+  // value is unchanged and the counts still calibrate it, but note that
+  // person-hours scale with this length, so it is the single assumption that
+  // most changes the headline. See junctionsOnLink, which has the same issue.
+  linkLengthKm: 1.6,
   freeFlowSpeedKph: 48,     // 30 mph limit, free-flow running speed
 
   // Junction
   saturationFlow: 1800,     // pcu/hr/lane, standard urban value
   greenFraction: 0.55,      // proportion of cycle time green to this approach
   cycleTimeSec: 90,         // signal cycle at the controlling junction
+  // OSM has 8 signal installations over the 1.6 km west of the gates and 5
+  // over the 1.6 km east, so 5 is defensible eastbound and low westbound.
+  // The 800 m actually drawn carries 2, which is why the simulation runs a
+  // little faster than this model does. That is a real disagreement between
+  // the two halves, not a bug in either.
+  // OSM has 8 signal installations over the 1.6 km west of the gates and 5
+  // over the 1.6 km east, so 5 is defensible eastbound and low westbound. The
+  // 800 m actually drawn carries 2, which is why the simulation runs a little
+  // faster than this model. A real disagreement between the halves, not a bug.
   junctionsOnLink: 5,       // signalised junctions and crossings on the modelled link
 
   // Link delay (BPR)

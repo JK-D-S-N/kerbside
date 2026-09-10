@@ -10,7 +10,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { FRONTAGE, STREETS, TREES, AVENUE } from './frontage.js';
+import { FRONTAGE, STREETS, TREES, AVENUE, SIGNALS } from './frontage.js';
 import { addContext } from './context-render.js';
 
 export const LANE_W = 3.2;
@@ -49,12 +49,21 @@ export function mulberry32(seed) {
 }
 
 /**
- * Signalised junctions along the drawn length, as world z.
+ * Junctions along the drawn length, as world z: every side street meeting the
+ * corridor inside the section, plus the point the extractor calls the
+ * Stormont gates.
  *
- * These are the real ones: every side street that meets the corridor inside
- * the section, plus the Stormont gates. One signal in the middle of an 800 m
- * arterial was the reason the picture never looked like the road, because it
- * is the stopping that makes the queue, not the volume.
+ * NONE OF THESE IS SIGNALISED, and the simulation must not stop corridor
+ * traffic at them. OSM tags no traffic signal, give way or stop node at
+ * Rosepark, Rosemount Avenue or Summerhill Avenue: they are priority
+ * T-junctions serving tens of houses, and the scene paints give way across
+ * their mouths. Prince of Wales Avenue is tagged highway=service and never
+ * shares a node with the A20 in OSM at all, so the gates have no junction
+ * node to carry a control tag either.
+ *
+ * Where traffic does stop is SIGNAL_Z, which is read off the traffic_signals
+ * nodes rather than inferred from this list. Deriving the stop lines from
+ * here instead is what had cars running a red at three give-way junctions.
  */
 export const JUNCTION_Z = (() => {
   const zs = STREETS.map((st) => st.z);
@@ -65,6 +74,52 @@ export const JUNCTION_Z = (() => {
     // Merge junctions closer than 40 m; they operate as one stop line.
     .filter((z, i, all) => i === 0 || z - all[i - 1] > 40);
 })();
+
+/** Signal heads closer together than this are one installation. */
+const SIGNAL_GROUP_M = 60;
+
+/**
+ * The signal installations on the corridor, from OSM.
+ *
+ * Two of them inside the drawn 800 m, and neither is a junction. The first,
+ * around z = -47, sits on the Stormont Estate accesses beside count point
+ * 921, with cycle advanced stop lines both ways and a central island. The
+ * second, around z = +77, is a signal-controlled pedestrian crossing beside
+ * the Summerhill Avenue halt, 34 m clear of the Summerhill Avenue junction.
+ *
+ * OSM tags one head per approach, so an installation arrives as a pair of
+ * nodes a few metres apart. A driver stops at the near one, so the head with
+ * the larger z is the inbound stop line and the smaller one the outbound.
+ * That is read off the geometry, not off traffic_signals:direction, which is
+ * relative to the OSM way's own direction and means nothing in this frame.
+ * The two agree here, and the test checks that they still do.
+ */
+export const SIGNAL_INSTALLATIONS = (() => {
+  const heads = SIGNALS
+    .filter((s) => s.kind === 'head' && Math.abs(s.z) < HALF - 20)
+    .sort((a, b) => a.z - b.z);
+  const groups = [];
+  for (const h of heads) {
+    const last = groups[groups.length - 1];
+    if (last && h.z - last[last.length - 1].z <= SIGNAL_GROUP_M) last.push(h);
+    else groups.push([h]);
+  }
+  return groups.map((g) => {
+    const lo = g[0].z;
+    const hi = g[g.length - 1].z;
+    const crossing = SIGNALS.find(
+      (s) => s.kind === 'crossing' && s.z >= lo - 2 && s.z <= hi + 2
+    );
+    return { inbound: hi, outbound: lo, centre: (lo + hi) / 2,
+             crossingZ: crossing ? crossing.z : null };
+  });
+})();
+
+/** The stop line each direction meets at each installation, as world z. */
+export const SIGNAL_Z = {
+  inbound: SIGNAL_INSTALLATIONS.map((g) => g.inbound).sort((a, b) => b - a),
+  outbound: SIGNAL_INSTALLATIONS.map((g) => g.outbound).sort((a, b) => a - b),
+};
 
 /**
  * Side-street cross-section. The corridor's own section, narrowed.
@@ -155,9 +210,6 @@ export function kerbSpans(side) {
   if (z < HALF) spans.push([z, HALF]);
   return spans;
 }
-
-/** Kept for the single-stop-line callers; the first junction each way. */
-export const SIGNAL_Z = { inbound: -HALF + 70, outbound: HALF - 70 };
 
 /** Glider halts, as world z, one each way. */
 export const HALT_Z = { inbound: -HALF + 150, outbound: HALF - 150 };
@@ -658,46 +710,72 @@ export function buildScene(renderer) {
   }
 
   // ---- Signal heads -------------------------------------------------------
+  //
+  // One head and one stop line per approach at every installation OSM has,
+  // rather than one invented head per direction 70 m in from the section end.
+  // The heads a driver can see are now the only places the simulation stops
+  // him, which is the whole correspondence this tool rests on.
   const signals = {};
-  const signalHeads = { inbound: [], outbound: [] };
-  for (const [direction, z] of Object.entries(SIGNAL_Z)) {
+  for (const direction of ['inbound', 'outbound']) {
     const side = direction === 'inbound' ? -1 : 1;
-    const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.09, 0.09, 3.4, 6),
-      new THREE.MeshStandardMaterial({ color: 0x2c313c, roughness: 0.7 })
-    );
-    pole.position.set(side * (KERB_X + 0.5), 1.7, z);
-    group.add(pole);
+    // Every head facing one way shows the same aspect, so they share a
+    // material and change together. main.js reaches through to the material,
+    // so hand it that: a direction with no signals then still has something
+    // to colour rather than a missing mesh.
+    const redMat = new THREE.MeshBasicMaterial({ color: 0xd03b3b });
+    const greenMat = new THREE.MeshBasicMaterial({ color: 0x0ca30c });
 
-    const box = new THREE.Mesh(
-      new THREE.BoxGeometry(0.34, 1.0, 0.34),
-      new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.8 })
-    );
-    box.position.set(side * (KERB_X + 0.5), 3.7, z);
-    group.add(box);
+    for (const z of SIGNAL_Z[direction]) {
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.09, 0.09, 3.4, 6),
+        new THREE.MeshStandardMaterial({ color: 0x2c313c, roughness: 0.7 })
+      );
+      pole.position.set(side * (KERB_X + 0.5), 1.7, z);
+      group.add(pole);
 
-    const red = new THREE.Mesh(
-      new THREE.SphereGeometry(0.13, 10, 8),
-      new THREE.MeshBasicMaterial({ color: 0xd03b3b })
-    );
-    red.position.set(side * (KERB_X + 0.5) - side * 0.2, 4.05, z);
-    const green = new THREE.Mesh(
-      new THREE.SphereGeometry(0.13, 10, 8),
-      new THREE.MeshBasicMaterial({ color: 0x0ca30c })
-    );
-    green.position.set(side * (KERB_X + 0.5) - side * 0.2, 3.35, z);
-    group.add(red, green);
+      const box = new THREE.Mesh(
+        new THREE.BoxGeometry(0.34, 1.0, 0.34),
+        new THREE.MeshStandardMaterial({ color: 0x1a1d24, roughness: 0.8 })
+      );
+      box.position.set(side * (KERB_X + 0.5), 3.7, z);
+      group.add(box);
 
-    // Stop line.
-    const stop = new THREE.Mesh(
-      new THREE.PlaneGeometry(LANE_W * 2, 0.4),
-      new THREE.MeshBasicMaterial({ color: 0xb8c0d0, transparent: true, opacity: 0.55 })
-    );
-    stop.rotation.x = -Math.PI / 2;
-    stop.position.set(side * 3.2, 0.014, z);
-    group.add(stop);
+      const red = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), redMat);
+      red.position.set(side * (KERB_X + 0.5) - side * 0.2, 4.05, z);
+      const green = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), greenMat);
+      green.position.set(side * (KERB_X + 0.5) - side * 0.2, 3.35, z);
+      group.add(red, green);
 
-    signals[direction] = { red, green };
+      // Stop line, across that direction's half of the carriageway only.
+      const stop = new THREE.Mesh(
+        new THREE.PlaneGeometry(LANE_W * 2, 0.4),
+        new THREE.MeshBasicMaterial({ color: 0xb8c0d0, transparent: true, opacity: 0.55 })
+      );
+      stop.rotation.x = -Math.PI / 2;
+      stop.position.set(side * 3.2, 0.014, z);
+      group.add(stop);
+    }
+
+    signals[direction] = { red: { material: redMat }, green: { material: greenMat } };
+  }
+
+  // The pedestrian crossing between the stop lines, where OSM tags one. It is
+  // the answer to the obvious question about a red light with no junction
+  // under it: people cross there, and that is where the corridor's delay
+  // comes from on this section rather than from turning traffic.
+  for (const inst of SIGNAL_INSTALLATIONS) {
+    if (inst.crossingZ === null) continue;
+    const markMat2 = new THREE.MeshBasicMaterial({
+      color: 0xb8c0d0, transparent: true, opacity: 0.5,
+    });
+    for (const row of [-1.1, 1.1]) {
+      for (let x = -KERB_X + 0.6; x < KERB_X; x += 1.2) {
+        const stud = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.5), markMat2);
+        stud.rotation.x = -Math.PI / 2;
+        stud.position.set(x, 0.014, inst.crossingZ + row);
+        group.add(stud);
+      }
+    }
   }
 
   // ---- Lighting -----------------------------------------------------------

@@ -13,7 +13,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { LANES, LANE_W, ROAD_LEN, HALF, KERB_X, JUNCTION_Z, JUNCTIONS, mulberry32 } from './scene.js';
+import { LANES, LANE_W, ROAD_LEN, HALF, KERB_X, SIGNAL_Z, JUNCTIONS, mulberry32 } from './scene.js';
 
 // Raised from 460 to carry the side-road queues as well as the corridor. A
 // side road that cannot get out is the point, so it must not be the thing
@@ -44,17 +44,26 @@ const IDM = {
 };
 
 /**
- * Stop lines, as distance from lane entry, one per signalised junction.
+ * Stop lines, as distance from lane entry, one per signalised approach.
  *
- * A single stop line on 800 m of arterial was why the road never looked like
- * the road: it is the stopping that makes the queue, not the volume. These are
- * the real junctions from JUNCTION_Z, so a car crossing the section meets
- * every set of lights it actually meets.
+ * These come from SIGNAL_Z, which is the OSM traffic_signals nodes, and NOT
+ * from the junction list. On this section the two are nothing like the same.
+ * Every junction inside the drawn 800 m is priority-controlled, and deriving
+ * the stop lines from them stopped corridor traffic at three residential
+ * T-junctions that have give way painted across their mouths. The picture
+ * showed the marking and the simulation drove through it, which is the one
+ * disagreement between the two halves nobody local would miss.
+ *
+ * What is left is the two real installations: the Stormont Estate accesses
+ * around z = -47 and the pedestrian crossing around z = +77. Both are still
+ * inside the section and near the middle of it, so the queueing they cause is
+ * still the queueing you watch form. It is simply now caused by the signals
+ * the road has rather than by three it does not.
  */
 export const STOP_LINES = {
-  inbound: JUNCTION_Z.map((z) => HALF - z).filter((s) => s > 20 && s < ROAD_LEN - 20)
+  inbound: SIGNAL_Z.inbound.map((z) => HALF - z).filter((s) => s > 20 && s < ROAD_LEN - 20)
     .sort((a, b) => a - b),
-  outbound: JUNCTION_Z.map((z) => z + HALF).filter((s) => s > 20 && s < ROAD_LEN - 20)
+  outbound: SIGNAL_Z.outbound.map((z) => z + HALF).filter((s) => s > 20 && s < ROAD_LEN - 20)
     .sort((a, b) => a - b),
 };
 const HALT_S = 250;              // distance from lane entry to the Glider halt
@@ -468,14 +477,12 @@ export class TrafficSim {
    * and on this corridor it is not cosmetic.
    *
    * It replaced a flat stagger of 0.28 of a cycle between adjacent stop
-   * lines. Rosemount Avenue and Summerhill Avenue are 47.7 m apart, which
-   * holds about seven cars, so a fixed 0.28 stagger left the pair with only
-   * 0.27 of a cycle when both were green and the upstream one discharged
-   * into a box that was already full. Measured throughput was 560 veh/hr
-   * against a demand of 749 and a modelled capacity of 990, so the corridor
-   * never reached a steady state: it filled until it stopped, at about 5 mph
-   * against the analytic model's 17. Progression carries the demand and
-   * settles at the speed the model says.
+   * lines, which back when there were four of them left closely spaced pairs
+   * discharging into a box that was already full: throughput fell to 560
+   * veh/hr against a demand of 749 and the corridor filled until it stopped.
+   * The two installations left are 124 m apart, far enough that the stagger
+   * matters less, but progression is still what a co-ordinated arterial does
+   * and it is still the honest default.
    *
    * The two directions still run on independent phases at the same junction,
    * which a real controller would not do, so both get a clean wave. On a real
@@ -559,20 +566,24 @@ export class TrafficSim {
   /**
    * Where turns happen, per direction, in the order a driver meets them.
    *
-   * Only the three side streets. The Stormont gates are a stop line in the
-   * simulation but Prince of Wales Avenue is on the far side of the road and
-   * the estate traffic is not counted anywhere, so inventing a turning flow
-   * for it would be inventing a number twice over.
+   * Only the three side streets. Prince of Wales Avenue is on the far side of
+   * the road, does not connect to the A20 in OSM at all, and the estate
+   * traffic is not counted anywhere, so inventing a turning flow for it would
+   * be inventing a number twice over.
    */
   buildTurnPoints() {
     for (const direction of ['inbound', 'outbound']) {
       const lines = STOP_LINES[direction] || [];
       this.turnPoints[direction] = this.arms.map((arm) => {
         const s = this.junctionS(direction, arm.z);
-        // Index into this direction's stop lines, so a turning vehicle reads
-        // the same signal as everything else in its lane.
-        let idx = lines.findIndex((v) => Math.abs(v - s) < 1e-6);
-        if (idx < 0) idx = 0;
+        // Index into this direction's stop lines when the junction happens to
+        // be signalised, so a turning vehicle reads the same signal as
+        // everything else in its lane. All three of these are priority
+        // junctions, so it is null, and a driver turning at one is looking for
+        // a gap rather than waiting for a green. Falling back to index 0 held
+        // every turner at a red belonging to a signal somewhere else entirely.
+        const found = lines.findIndex((v) => Math.abs(v - s) < 1e-6);
+        const idx = found < 0 ? null : found;
         return {
           arm,
           s,
@@ -680,7 +691,9 @@ export class TrafficSim {
     const direction = lane.direction;
 
     if (!t.go) {
-      const green = this.isGreen(direction, t.pt.idx);
+      // A priority junction has no signal to wait for, so the only thing
+      // between the driver and the turn is the gap.
+      const green = t.pt.idx === null ? true : this.isGreen(direction, t.pt.idx);
       const near = veh.s > t.pt.s - COMMIT_AHEAD;
       // Only time spent stopped counts as waiting. Rolling up to the line is
       // not patience running out.
@@ -691,9 +704,11 @@ export class TrafficSim {
         const crit = acceptedGap(base, t.heldFor);
         if (crossed.length === 0 || this.clearToCross(crossed, t.pt.arm.z, crit)) t.go = true;
       }
-      // Only green time counts. Sitting at a red is signal delay, which the
-      // analytic model already has, and folding it in here would double-count
-      // it and overstate what the turn costs.
+      // Only green time counts at a signal. Sitting at a red is signal delay,
+      // which the analytic model already has, and folding it in here would
+      // double-count it and overstate what the turn costs. At a priority
+      // junction there is no red, so every second of it is the turn's own
+      // cost and all of it counts.
       t.holding = !t.go && green && veh.v < 0.6 && veh.s > t.pt.s - 6;
       if (t.holding && t.pt.kind === 'right') this.stats.rightWaitSeconds += dt;
     }
@@ -996,12 +1011,11 @@ export class TrafficSim {
       // Cars.
       //
       // Demand that cannot be got in waits at the entry rather than being
-      // thrown away. The inbound stop line at the Stormont gates is 54 m
-      // inside the section, which holds about eight cars, so a red backs the
-      // queue out of the modelled length several times an hour. Discarding
-      // those arrivals cost the inbound direction a fifth of its demand and
-      // made the simulation quietly disagree with the count it was given.
-      // On the real road that queue simply stands further up the hill.
+      // thrown away. A red at either installation can back the queue out of
+      // the modelled length, and discarding those arrivals cost the inbound
+      // direction a fifth of its demand and made the simulation quietly
+      // disagree with the count it was given. On the real road that queue
+      // simply stands further up the hill.
       if (isGeneral && motors < MAX_CARS - MAX_BUSES) {
         const perLaneHourly = this.demand[lane.direction] / Math.max(1, generalInDir);
         lane.spawnAccumulator += (perLaneHourly / 3600) * dt;
