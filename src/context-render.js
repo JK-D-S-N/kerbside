@@ -47,6 +47,9 @@ const GROUND_Y = -0.3;
 // the parkland and the ground trade places in the distance. It is only safe to
 // lift them this far because they are cut out of the corridor box first.
 const GRASS_LIFT = 0.55;
+// Separation between overlapping green layers. Well clear of the depth
+// resolution at the far edge of the context, and invisible on the ground.
+const GREEN_STEP = 0.045;
 const RIBBON_LIFT = 0.70;
 
 /**
@@ -124,12 +127,47 @@ export function addContext(group, opts = {}) {
   root.add(groundMesh);
 
   // ---- Parkland -----------------------------------------------------------
-  const greenBuckets = { grass: [], wood: [], water: [] };
-  for (const g of CONTEXT_GREEN) {
-    if (!withinRange(g.ring, range)) continue;
-    const geo = surface(polygonTriangles(g.ring), sample, GRASS_LIFT);
-    if (geo) greenBuckets[g.kind].push(geo);
+  // OSM overlaps its green areas freely: a park, the grass inside it and a
+  // recreation ground can all cover the same field. Laid at one height and
+  // merged into one mesh those triangles are exactly coplanar, which z-fights
+  // however much depth precision you give it. So overlapping polygons are
+  // separated into layers first, by greedy colouring over the overlap graph,
+  // and each layer sits a few centimetres above the last. Two or three layers
+  // is typical, so the total lift stays far too small to see.
+  const greens = CONTEXT_GREEN.filter((g) => withinRange(g.ring, range));
+  const greenBox = greens.map((g) => {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const [x, z] of g.ring) {
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (z < z0) z0 = z;
+      if (z > z1) z1 = z;
+    }
+    return { x0, x1, z0, z1, area: (x1 - x0) * (z1 - z0) };
+  });
+
+  // Largest first, so the big field takes the bottom layer and the small
+  // pitches sitting inside it stack on top, which is also the right way round.
+  const order = greens.map((_, i) => i).sort((a, b) => greenBox[b].area - greenBox[a].area);
+  const layerOf = new Array(greens.length).fill(0);
+  for (const i of order) {
+    const taken = new Set();
+    for (const j of order) {
+      if (j === i || layerOf[j] === undefined) continue;
+      const a = greenBox[i];
+      const b = greenBox[j];
+      if (a.x0 < b.x1 && b.x0 < a.x1 && a.z0 < b.z1 && b.z0 < a.z1) taken.add(layerOf[j]);
+    }
+    let k = 0;
+    while (taken.has(k)) k++;
+    layerOf[i] = k;
   }
+
+  const greenBuckets = { grass: [], wood: [], water: [] };
+  greens.forEach((g, i) => {
+    const geo = surface(polygonTriangles(g.ring), sample, GRASS_LIFT + layerOf[i] * GREEN_STEP);
+    if (geo) greenBuckets[g.kind].push(geo);
+  });
   const layers = {};
   for (const kind of Object.keys(greenBuckets)) {
     const geos = greenBuckets[kind];
