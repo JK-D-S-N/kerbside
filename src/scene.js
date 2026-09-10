@@ -599,7 +599,9 @@ export function buildScene(renderer) {
     label.rotation.x = -Math.PI / 2;
     // Sit it just off the carriageway on the side the street joins, reading
     // along the road so it never fights the corridor.
-    label.position.set(st.side * (FOOTWAY_X + 6.5), 0.06, st.z);
+    // Above the footways, which are 0.14 tall. At 0.06 the side road
+    // footways and the junction aprons drew straight over the name.
+    label.position.set(st.side * (FOOTWAY_X + 6.5), 0.22, st.z);
     label.rotation.z = Math.PI / 2;
     group.add(label);
     streetLabels.push(label);

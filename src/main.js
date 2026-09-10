@@ -56,7 +56,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.02;
 
-const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.5, 1600);
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 2.5, 2600);
 
 // The working framing, and the high wide one the page opens from. The entry
 // flies between them so you see where this is before you see any numbers.

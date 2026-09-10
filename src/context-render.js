@@ -46,8 +46,8 @@ const GROUND_Y = -0.3;
 // resolution at the far edge, so the clearance has to be bigger than that or
 // the parkland and the ground trade places in the distance. It is only safe to
 // lift them this far because they are cut out of the corridor box first.
-const GRASS_LIFT = 0.35;
-const RIBBON_LIFT = 0.45;
+const GRASS_LIFT = 0.55;
+const RIBBON_LIFT = 0.70;
 
 /**
  * The four regions outside the corridor box, each convex, together covering
