@@ -222,6 +222,24 @@ export const BUS_LOAD_PROFILE = [
 ];
 
 /**
+ * Buses actually running, hour by hour, as a share of the peak frequency.
+ *
+ * The Glider is not a fixed headway all day. It runs every few minutes at
+ * peak, drops to a slower off-peak headway through the middle of the day,
+ * and thins out again in the evening. Modelling one flat frequency was
+ * generous to the all-day bus lane in the same way one flat load was: it
+ * held a lane open for buses that, off-peak, are not there.
+ *
+ * Shape only, from published Glider headways of roughly 7 to 8 minutes at
+ * peak against 10 to 12 off-peak. It is not a timetable.
+ */
+export const BUS_FREQUENCY_PROFILE = [
+  0.10, 0.00, 0.00, 0.00, 0.15, 0.45, 0.80, 1.00, 1.00, 0.75,
+  0.65, 0.65, 0.65, 0.65, 0.70, 0.85, 1.00, 1.00, 0.85, 0.65,
+  0.50, 0.40, 0.30, 0.20,
+];
+
+/**
  * @param {number} hour  clock hour, so bus loading can follow the day
  */
 export function evaluateHour(observedVeh, cfg, a, busLaneActive, hour = null) {
@@ -229,7 +247,10 @@ export function evaluateHour(observedVeh, cfg, a, busLaneActive, hour = null) {
   const capacity = lanes * a.saturationFlow * a.greenFraction;
 
   // Bus service. Ridership is assumed to fall when the lane is taken away.
-  const busesPerHour = cfg.busServiceOn ? cfg.busesPerHour : 0;
+  // cfg.busesPerHour is the peak frequency, as cfg.busLoad is the peak load.
+  // A caller with no hour, meaning a single-hour probe, gets the peak.
+  const freqShape = hour === null ? 1 : BUS_FREQUENCY_PROFILE[((hour % 24) + 24) % 24];
+  const busesPerHour = cfg.busServiceOn ? cfg.busesPerHour * freqShape : 0;
   const loadFactor = busLaneActive ? 1 : 1 - a.ridershipLossWithoutLane;
   // cfg.busLoad is the load at the busiest hour. Every other hour is a share
   // of it. A caller with no hour (a single-hour probe) gets the peak.

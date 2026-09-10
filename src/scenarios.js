@@ -55,10 +55,10 @@ export const PRESETS = [
     // would?", so it sets the service level rather than asserting the number.
     id: 'what-it-takes',
     name: 'What it would take',
-    detail: 'Bus lane 07:00 to 19:00, a Glider every four minutes, 85 aboard at the busiest hour. Roughly the point where the lane stops costing time.',
+    detail: 'Bus lane 07:00 to 19:00, a Glider every three to four minutes at peak, 85 aboard at the busiest hour. Roughly the point where the lane stops costing time.',
     config: {
       busLaneOn: true, busLanePeakOnly: false, busLaneStart: 7, busLaneEnd: 19,
-      bikeLaneOn: false, busesPerHour: 15, busLoad: 85,
+      bikeLaneOn: false, busesPerHour: 18, busLoad: 85,
     },
   },
 ];
@@ -115,6 +115,7 @@ export const LIMITATIONS = [
   'No published journey time data exists for this link, so the delay curve is calibrated against throughput only. It reproduces the observed peak flow; it has not been checked against observed travel times.',
   'Demand is fixed at the observed 2023 profile and scaled by a multiplier. There is no elasticity: the model does not let people give up a trip because it got slower.',
   'Bus patronage responds to the bus lane through one editable assumption, not a demand model.',
+  'Buses per hour and passengers per bus are both set at the peak, and the day is shaped from published Glider headways and a commuter loading curve. Neither is a timetable or a patronage survey.',
   'No turning count is published for Rosepark, Rosemount Avenue or Summerhill Avenue. The turning shares are assumptions. What the counts do fix is the net: the two count points either end of the section report the same flow to within a quarter of one per cent, so the side roads are modelled as giving back exactly what they take.',
   'Turning is in the simulation, not in the analytic model. The delay a right turner causes is visible in the picture and is not in the headline numbers.',
   'Vehicle emissions are modelled from average link speed. Real stop-start emissions depend on the number of stops, not just the mean.',
