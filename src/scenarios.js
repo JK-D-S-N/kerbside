@@ -115,6 +115,8 @@ export const LIMITATIONS = [
   'No published journey time data exists for this link, so the delay curve is calibrated against throughput only. It reproduces the observed peak flow; it has not been checked against observed travel times.',
   'Demand is fixed at the observed 2023 profile and scaled by a multiplier. There is no elasticity: the model does not let people give up a trip because it got slower.',
   'Bus patronage responds to the bus lane through one editable assumption, not a demand model.',
+  'No turning count is published for Rosepark, Rosemount Avenue or Summerhill Avenue. The turning shares are assumptions. What the counts do fix is the net: the two count points either end of the section report the same flow to within a quarter of one per cent, so the side roads are modelled as giving back exactly what they take.',
+  'Turning is in the simulation, not in the analytic model. The delay a right turner causes is visible in the picture and is not in the headline numbers.',
   'Vehicle emissions are modelled from average link speed. Real stop-start emissions depend on the number of stops, not just the mean.',
 ];
 
@@ -132,6 +134,11 @@ export const ASSUMPTION_FIELDS = [
   { key: 'carAbstractionRate', label: 'Bus riders who would drive', unit: 'share', min: 0, max: 1, step: 0.05 },
   { key: 'ridershipLossWithoutLane', label: 'Patronage lost with no lane', unit: 'share', min: 0, max: 0.8, step: 0.05 },
   { key: 'busEmissionsPerKm', label: 'Bus CO2', unit: 'g/km', min: 0, max: 2000, step: 50 },
+  // Turning movements. No published turning count exists for these junctions,
+  // so these two are the most assumed numbers in the tool and belong in front
+  // of the user rather than in the source.
+  { key: 'leftTurnShare', label: 'Left turns off, per junction', unit: 'share', min: 0, max: 0.15, step: 0.01 },
+  { key: 'rightTurnShare', label: 'Right turns off, per junction', unit: 'share', min: 0, max: 0.15, step: 0.01 },
 ];
 
 export { DEFAULT_ASSUMPTIONS };

@@ -404,6 +404,10 @@ function syncSim() {
     freeFlowMs: a.freeFlowSpeedKph / 3.6,
     busesPerHour: cfg.busServiceOn ? cfg.busesPerHour : 0,
     demand: { inbound: inbound.carDemand, outbound: outbound.carDemand },
+    // Turning shares. Assumptions, and editable, so they come from the same
+    // panel as everything else the user is invited to disagree with.
+    leftTurnShare: a.leftTurnShare,
+    rightTurnShare: a.rightTurnShare,
     resetDensity,
   });
 

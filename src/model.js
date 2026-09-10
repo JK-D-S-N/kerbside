@@ -52,6 +52,30 @@ export const DEFAULT_ASSUMPTIONS = {
   // Behaviour
   carAbstractionRate: 0.40, // share of bus passengers who would otherwise drive
   ridershipLossWithoutLane: 0.25, // bus patronage lost if the bus lane is removed
+
+  // Turning movements at Rosepark, Rosemount Avenue and Summerhill Avenue.
+  //
+  // Not used by anything below. Nothing in the analytic model turns: these
+  // drive the microsimulation only, and they are here because this is where
+  // the tool keeps the coefficients you are allowed to argue with.
+  //
+  // Both are ASSUMPTIONS. DfI count points 918 and 921 are mainline counts
+  // and publish no turning breakdown, and no turning survey exists for these
+  // junctions. What the two counts do constrain is the net: 13,380 AADT at
+  // one end of the section and 13,350 at the other means whatever leaves the
+  // corridor is matched by what joins it. The simulation is built to that,
+  // generating each side road's outflow at the same rate as its inflow, so
+  // mainline flow past any point still reconciles with the counts.
+  //
+  // The right share is 0.02 rather than the 0.03 first tried, and that is a
+  // finding, not a tuning. Measured over two simulated hours at 17:00, the
+  // busiest outbound hour, 0.03 grows the outbound running lane without
+  // bound: 27 vehicles to 44, mean speed 16 mph down to 11, still climbing.
+  // 0.02 holds flat. One running lane cannot carry three per cent of 798
+  // veh/hr turning right across oncoming traffic with no right-turn pocket.
+  // The slider goes to 0.15, so push it and watch the corridor tip over.
+  leftTurnShare: 0.05,      // share of a direction's flow turning left off, per junction
+  rightTurnShare: 0.02,     // and turning right off, which is what the lane cannot absorb
 };
 
 /**

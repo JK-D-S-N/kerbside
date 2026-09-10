@@ -6,6 +6,7 @@ import {
   busFreeFlowJourneyMin, carEmissionsPerKm, evaluateHour, runDay, solveBreakEven,
 } from '../src/model.js';
 import { COUNTS } from '../src/counts.js';
+import { DEFAULT_CONFIG } from '../src/scenarios.js';
 import { JUNCTIONS, JUNCTION_Z, MOUTH_HALF, HALF, ROAD_LEN, KERB_X } from '../src/scene.js';
 import { STOP_LINES } from '../src/vehicles.js';
 
@@ -367,4 +368,232 @@ test('no cycles are put in the nearside lane when the bus lane is off', async ()
   const bikes = sim.lanes.flatMap((l) => l.vehicles)
     .filter((v) => v.type === 'cycle' || v.type === 'moto');
   assert.equal(bikes.length, 0, `${bikes.length} bikes with the bus lane off`);
+});
+
+// ---------------------------------------------------------------------------
+// Turning movements. Nothing used to leave the corridor and nothing used to
+// join it, which took out the largest single cause of delay on a road like
+// this: the car in the offside lane waiting to turn right with the lane
+// behind it going nowhere. The shares are assumptions, so what is checked
+// here is the mechanism and the arithmetic, not the levels.
+
+/** A busy hour, one general lane each way, turning on. */
+async function turningSim(over = {}) {
+  const THREE = await import('three');
+  const { TrafficSim } = await import('../src/vehicles.js');
+  const sim = new TrafficSim(new THREE.Group());
+  sim.configure({
+    busLaneActive: true, bikeLaneOn: false, cycleTimeSec: 90, greenFraction: 0.55,
+    freeFlowMs: 13.3, busesPerHour: 10, demand: { inbound: 750, outbound: 740 },
+    leftTurnShare: 0.05, rightTurnShare: 0.03, resetDensity: true, ...over,
+  });
+  return sim;
+}
+
+function run(sim, seconds, dt = 0.05) {
+  for (let i = 0; i < seconds / dt; i++) sim.step(dt);
+}
+
+test('turn points sit exactly on stop lines, inside the drawn mouths', async () => {
+  const sim = await turningSim();
+  assert.ok(sim.arms.length >= 3, `${sim.arms.length} side-road arms`);
+  for (const direction of ['inbound', 'outbound']) {
+    for (const pt of sim.turnPoints[direction]) {
+      // The turn happens at the junction the simulation already stops traffic
+      // at. If these ever drift apart, cars turn into the kerb.
+      assert.ok(STOP_LINES[direction].some((s) => Math.abs(s - pt.s) < 1e-6),
+        `${pt.arm.name} ${direction} turn at s=${pt.s} is not a stop line`);
+      assert.equal(STOP_LINES[direction][pt.idx], pt.s,
+        `${pt.arm.name} ${direction} reads the wrong signal`);
+      const drawn = JUNCTIONS.find((j) => Math.abs(j.z - pt.arm.z) < 1e-9);
+      assert.ok(drawn, `${pt.arm.name} turns into a street that is not drawn`);
+      assert.ok(Math.abs(drawn.z - pt.arm.z) < MOUTH_HALF);
+    }
+  }
+});
+
+test('turning does not disturb the stop lines themselves', async () => {
+  const before = JSON.stringify(STOP_LINES);
+  const sim = await turningSim();
+  run(sim, 400);
+  assert.equal(JSON.stringify(STOP_LINES), before, 'STOP_LINES was mutated');
+});
+
+test('every vehicle that turns off comes back out of the side road', async () => {
+  // The mainline reconciliation. The two DfI count points either end of the
+  // section report the same flow, so the side roads must give back what they
+  // take or the modelled flow decays along the corridor and stops matching.
+  const inArms = () => sim.arms.reduce(
+    (n, a) => n + a.queue.length + a.owed.inbound + a.owed.outbound, 0
+  );
+
+  const sim = await turningSim();
+  run(sim, 600);
+  sim.resetStats();
+  // The warm-up leaves vehicles part way through an arm. They turned off
+  // before the counters were reset, so they are not in `off`, and measuring
+  // the change in what the arms hold is what makes this balance.
+  const heldAtStart = inArms();
+  run(sim, 3600);
+  const s = sim.stats;
+  const off = s.turnsOffLeft + s.turnsOffRight;
+  const on = s.mergesInbound + s.mergesOutbound;
+  const held = inArms() - heldAtStart;
+  assert.ok(off > 50, `only ${off} turns off in a simulated hour`);
+  assert.equal(off, on + held,
+    `${off} off, ${on} on, arms went from ${heldAtStart} to ${inArms()}`);
+});
+
+test('turning is deterministic, like everything else in here', async () => {
+  const a = await turningSim();
+  const b = await turningSim();
+  run(a, 1200);
+  run(b, 1200);
+  assert.deepEqual(a.stats, b.stats);
+});
+
+test('a right turner waits for a gap and holds up the lane behind it', async () => {
+  const sim = await turningSim();
+  run(sim, 600);
+  sim.resetStats();
+  run(sim, 3600);
+  assert.ok(sim.stats.turnsOffRight > 10, `${sim.stats.turnsOffRight} right turns an hour`);
+  assert.ok(sim.stats.rightWaitSeconds > 30,
+    `right turners lost only ${sim.stats.rightWaitSeconds.toFixed(0)} s of green`);
+  assert.ok(sim.stats.blockedSeconds > sim.stats.rightWaitSeconds,
+    'a blocked lane should cost more vehicle-seconds than the turner itself');
+});
+
+test('right turns are made from the offside lane and lefts from the kerb side', async () => {
+  const sim = await turningSim();
+  // With the bus lane operating there is one general lane each way, so the
+  // left turn is made across the bus lane.
+  assert.equal(sim.turnLaneFor('inbound', -1).id, 'in-off');
+  assert.equal(sim.turnLaneFor('outbound', -1).id, 'out-off');
+  // Switch the bus lane off and the nearside lane comes back for the left.
+  sim.configure({
+    busLaneActive: false, bikeLaneOn: false, cycleTimeSec: 90, greenFraction: 0.55,
+    freeFlowMs: 13.3, busesPerHour: 10, demand: { inbound: 750, outbound: 740 },
+    leftTurnShare: 0.05, rightTurnShare: 0.03, resetDensity: true,
+  });
+  assert.equal(sim.turnLaneFor('inbound', -1).id, 'in-near');
+  assert.equal(sim.turnLaneFor('outbound', -1).id, 'out-off');
+  // An outbound right turn crosses both inbound lanes and nothing else.
+  const crossed = sim.crossedLanes(sim.turnLaneFor('outbound', -1), -1).map((l) => l.id);
+  assert.deepEqual(crossed.sort(), ['in-near', 'in-off']);
+});
+
+test('a merging vehicle never joins an operating bus lane', async () => {
+  const sim = await turningSim();
+  run(sim, 2400);
+  const busLane = sim.lanes.find((l) => l.id === 'in-near');
+  assert.ok(sim.stats.mergesInbound > 0, 'nothing ever merged inbound');
+  assert.equal(busLane.vehicles.filter((v) => v.type === 'car').length, 0,
+    'a car was put in the bus lane');
+});
+
+test('side-road queues stay on the side road', async () => {
+  const sim = await turningSim();
+  run(sim, 2400);
+  for (const arm of sim.arms) {
+    for (const car of arm.queue) {
+      assert.ok(car.d >= 0 && car.d <= arm.path.len,
+        `${arm.name}: a car at ${car.d.toFixed(1)} m is off the end of the street`);
+    }
+  }
+});
+
+test('no turning share means the corridor behaves exactly as it did', async () => {
+  const sim = await turningSim({ leftTurnShare: 0, rightTurnShare: 0 });
+  run(sim, 1800);
+  assert.equal(sim.stats.turnsOffLeft + sim.stats.turnsOffRight, 0);
+  assert.equal(sim.stats.mergesInbound + sim.stats.mergesOutbound, 0);
+  assert.equal(sim.arms.reduce((n, a) => n + a.queue.length, 0), 0);
+});
+
+// ---------------------------------------------------------------------------
+// Steady state. This is the check that was missed, so it is the one that gets
+// a test: a throughput that is steady but below demand is not a steady state,
+// it is a queue growing at a constant rate, and it looks fine for the first
+// few minutes of a demo and then seizes.
+
+/** The simulation configured exactly the way the page configures it. */
+async function pageSim(hour, over = {}) {
+  const THREE = await import('three');
+  const { TrafficSim } = await import('../src/vehicles.js');
+  const a = { ...DEFAULT_ASSUMPTIONS, ...over };
+  const cfg = { ...DEFAULT_CONFIG };
+  const active = busLaneOperating(hour, cfg);
+  const inbound = evaluateHour(COUNTS.inbound.weekday.total[hour], cfg, a, active);
+  const outbound = evaluateHour(COUNTS.outbound.weekday.total[hour], cfg, a, active);
+  const sim = new TrafficSim(new THREE.Group());
+  sim.configure({
+    busLaneActive: active, bikeLaneOn: cfg.bikeLaneOn, cycleTimeSec: a.cycleTimeSec,
+    greenFraction: a.greenFraction, freeFlowMs: a.freeFlowSpeedKph / 3.6,
+    busesPerHour: cfg.busServiceOn ? cfg.busesPerHour : 0,
+    demand: { inbound: inbound.carDemand, outbound: outbound.carDemand },
+    leftTurnShare: a.leftTurnShare, rightTurnShare: a.rightTurnShare, resetDensity: true,
+  });
+  return sim;
+}
+
+/** What the HUD reads: motor vehicles on the corridor, and their mean speed. */
+function corridorLoad(sim) {
+  let n = 0;
+  let sum = 0;
+  for (const lane of sim.lanes) {
+    for (const v of lane.vehicles) {
+      if (v.type === 'cycle' || v.type === 'moto') continue;
+      n++; sum += v.v;
+    }
+  }
+  return { n, mph: n ? (sum / n) * 3.6 / 1.609344 : 0 };
+}
+
+/** Mean load over the first and last thirds of a run, one sample a minute. */
+function loadTrend(sim, minutes, dt = 0.05) {
+  const rows = [];
+  for (let m = 0; m < minutes; m++) {
+    for (let i = 0; i < 60 / dt; i++) sim.step(dt);
+    rows.push(corridorLoad(sim));
+  }
+  const third = Math.floor(minutes / 3);
+  const mean = (r, k) => r.reduce((s, x) => s + x[k], 0) / r.length;
+  return {
+    early: { n: mean(rows.slice(0, third), 'n'), mph: mean(rows.slice(0, third), 'mph') },
+    late: { n: mean(rows.slice(-third), 'n'), mph: mean(rows.slice(-third), 'mph') },
+  };
+}
+
+for (const hour of [7, 8, 17]) {
+  test(`the corridor reaches a steady state at ${String(hour).padStart(2, '0')}:00`, async () => {
+    const sim = await pageSim(hour);
+    const t = loadTrend(sim, 60);
+    // Allowing a quarter more vehicles late than early is generous. A corridor
+    // that is filling up doubles inside an hour, which is what this catches.
+    assert.ok(t.late.n < t.early.n * 1.25,
+      `${hour}:00 still filling: ${t.early.n.toFixed(1)} veh early, ${t.late.n.toFixed(1)} late`);
+    assert.ok(t.late.mph > t.early.mph * 0.75,
+      `${hour}:00 still slowing: ${t.early.mph.toFixed(1)} mph early, ${t.late.mph.toFixed(1)} late`);
+    // And it must be moving, not crawling. The analytic model says roughly
+    // 17 mph at these hours; a corridor at walking pace is not corroborating
+    // anything, it is contradicting it.
+    assert.ok(t.late.mph > 10, `${hour}:00 settles at ${t.late.mph.toFixed(1)} mph`);
+  });
+}
+
+test('the default right-turn share is one the running lane can absorb', async () => {
+  // 0.03 was tried and does not recover at the 17:00 outbound peak. If anyone
+  // raises the default again, this is the test that should stop them.
+  const stable = await pageSim(17);
+  const s = loadTrend(stable, 45);
+  assert.ok(s.late.n < s.early.n * 1.25,
+    `default share runs away: ${s.early.n.toFixed(1)} -> ${s.late.n.toFixed(1)} veh`);
+
+  const pushed = await pageSim(17, { rightTurnShare: 0.05 });
+  const p = loadTrend(pushed, 45);
+  // Pushing the slider must visibly cost something, or the assumption is not
+  // doing any work and there is no point exposing it.
+  assert.ok(p.late.n > s.late.n * 1.15,
+    `raising the right-turn share changed nothing: ${s.late.n.toFixed(1)} vs ${p.late.n.toFixed(1)}`);
 });
